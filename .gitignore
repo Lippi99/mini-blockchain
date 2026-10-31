@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 wallets/
 *.pem
 node-data/
+
+# Claude Code agent worktrees
+.claude/worktrees/

@@ -10,33 +10,52 @@ public static class ChainValidator
     /// pass <see cref="ValidateBlock"/> against the block before it, and replaying all transactions
     /// from scratch must follow the transaction rules.
     /// </summary>
-    public static bool ValidateChain(IReadOnlyList<Block> blocks, ChainParameters parameters, [NotNullWhen(false)] out string? error)
+    public static bool ValidateChain(IReadOnlyList<Block> blocks, ChainParameters parameters, [NotNullWhen(false)] out string? error) =>
+        TryValidate(blocks, parameters, out _, out error);
+
+    /// <summary>
+    /// Validates a whole chain like <see cref="ValidateChain"/> and, if it is valid, returns it together
+    /// with the ledger state it produces, ready to be adopted by <see cref="Blockchain.TryReplaceChain(ValidatedChain, out IReadOnlyList{Transaction}, out string?)"/>.
+    /// </summary>
+    public static bool TryValidate(IReadOnlyList<Block> blocks, ChainParameters parameters,
+        [NotNullWhen(true)] out ValidatedChain? chain, [NotNullWhen(false)] out string? error)
     {
+        chain = null;
         if (blocks.Count == 0)
         {
             error = "The chain is empty.";
             return false;
         }
 
-        // Comparing both the stored and the recomputed hash checks every header field at once.
-        if (blocks[0].Hash != Genesis.Hash || blocks[0].ComputeHash() != Genesis.Hash)
+        // Comparing both the stored and the recomputed hash checks every header field at once. The
+        // genesis block has no transactions, which is checked first so a malformed block cannot crash the hashing.
+        if (blocks[0] is not { Transactions.Count: 0 } genesis || genesis.Hash != Genesis.Hash || genesis.ComputeHash() != Genesis.Hash)
         {
             error = "Block #0 is not the expected genesis block.";
             return false;
         }
 
+        // Copy the list so later changes to the caller's list cannot alter a chain that was already validated.
+        var copy = blocks.ToArray();
         var ledger = new LedgerState();
-        for (var i = 1; i < blocks.Count; i++)
+        for (var i = 1; i < copy.Length; i++)
         {
-            var expectedDifficulty = DifficultyAdjustment.ExpectedDifficulty(blocks, i, parameters);
-            if (!ValidateBlock(blocks[i], blocks[i - 1], expectedDifficulty, out var blockError) ||
-                !ledger.TryApplyBlock(blocks[i], parameters, out blockError))
+            if (copy[i] is null)
+            {
+                error = $"Block #{i}: the block is missing.";
+                return false;
+            }
+
+            var expectedDifficulty = DifficultyAdjustment.ExpectedDifficulty(copy, i, parameters);
+            if (!ValidateBlock(copy[i], copy[i - 1], expectedDifficulty, out var blockError) ||
+                !ledger.TryApplyBlock(copy[i], parameters, out blockError))
             {
                 error = $"Block #{i}: {blockError}";
                 return false;
             }
         }
 
+        chain = new ValidatedChain(copy, ledger, parameters);
         error = null;
         return true;
     }
@@ -48,8 +67,7 @@ public static class ChainValidator
     /// </summary>
     public static bool ValidateBlock(Block block, Block previous, int expectedDifficulty, [NotNullWhen(false)] out string? error)
     {
-        // Blocks can arrive from the network, so do not trust that required fields are present.
-        if (block.PreviousHash is null || block.Hash is null || block.Transactions is null || block.Transactions.Any(t => t is null))
+        if (IsMalformed(block))
         {
             error = "the block is malformed: a required field is missing.";
             return false;
@@ -73,4 +91,36 @@ public static class ChainValidator
 
         return error is null;
     }
+
+    /// <summary>
+    /// The checks that need nothing but the block itself: its fields are present, its hash matches its
+    /// contents and meets the difficulty it claims, and that difficulty is possible on this network. A node
+    /// runs this before believing that a block it cannot connect yet means a peer is ahead, so a forged
+    /// block costs real work instead of triggering a chain download for free.
+    /// </summary>
+    public static bool ValidateProofOfWork(Block block, ChainParameters parameters, [NotNullWhen(false)] out string? error)
+    {
+        if (IsMalformed(block))
+        {
+            error = "the block is malformed: a required field is missing.";
+            return false;
+        }
+
+        var possibleDifficulty = parameters.AdjustDifficulty ? block.Difficulty >= 1 : block.Difficulty == parameters.Difficulty;
+        var computedHash = block.ComputeHash();
+        if (block.Hash != computedHash)
+            error = $"the stored hash {block.Hash} does not match the block's contents (computed {computedHash}).";
+        else if (!possibleDifficulty)
+            error = $"the difficulty {block.Difficulty} is not possible on this network.";
+        else if (!ProofOfWork.MeetsDifficulty(block.Hash, block.Difficulty))
+            error = $"the hash does not start with {block.Difficulty} zeros, so the block was never mined.";
+        else
+            error = null;
+
+        return error is null;
+    }
+
+    // Blocks can arrive from the network, so do not trust that required fields are present.
+    private static bool IsMalformed(Block block) =>
+        block.PreviousHash is null || block.Hash is null || block.Transactions is null || block.Transactions.Any(t => t is null);
 }

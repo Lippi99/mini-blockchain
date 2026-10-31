@@ -9,29 +9,33 @@ if (args.Length == 0 || args[0] is "help" or "--help" or "-h")
 var options = CommandLine.Parse(args[1..]);
 try
 {
-    switch (args[0])
+    return args[0] switch
     {
-        case "demo":
-            return ChainDemo.Run();
-        case "tamper":
-            return TamperDemo.Run();
-        case "bench":
-            return Benchmark.Run(options);
-        case "ledger":
-            return LedgerDemo.Run();
-        case "signatures":
-            return SignatureDemo.Run();
-        case "wallet":
-            return WalletCommands.Run(options);
-        default:
-            Console.Error.WriteLine($"Unknown command '{args[0]}'.");
-            PrintHelp();
-            return 1;
-    }
+        "demo" => ChainDemo.Run(),
+        "tamper" => TamperDemo.Run(),
+        "bench" => Benchmark.Run(options),
+        "ledger" => LedgerDemo.Run(),
+        "signatures" => SignatureDemo.Run(),
+        "wallet" => WalletCommands.Run(options),
+        "status" => await NodeCommands.StatusAsync(options),
+        "chain" => await NodeCommands.ChainAsync(options),
+        "balance" => await NodeCommands.BalanceAsync(options),
+        "send" => await NodeCommands.SendAsync(options),
+        "mine" => await NodeCommands.MineAsync(options),
+        "peers" => await NodeCommands.PeersAsync(options),
+        _ => Unknown(args[0]),
+    };
 }
 catch (CliUsageException e)
 {
     Console.Error.WriteLine(e.Message);
+    return 1;
+}
+
+static int Unknown(string command)
+{
+    Console.Error.WriteLine($"Unknown command '{command}'.");
+    PrintHelp();
     return 1;
 }
 
@@ -53,5 +57,14 @@ static void PrintHelp()
           wallet new   [--name default] [--password <pw>]   Create a key pair and print its address
           wallet show  [--name default] [--password <pw>]   Print a wallet's address and public key
                        The password can also come from MINICHAIN_WALLET_PASSWORD.
+
+        Talking to a node (--node <url>, or MINICHAIN_NODE, default http://localhost:5001):
+          status                                    Show the node's height, tip, difficulty and peers
+          chain                                     Print the node's whole chain
+          balance  [--name <wallet> | --address <a>] Show an address's balance and next nonce
+          send     --to <address> --amount <n> [--fee <n>] [--name <wallet>]
+                                                    Sign a payment with a wallet and submit it
+          mine     [--name <wallet> | --address <a>] Ask the node to mine a block paying you the reward
+          peers    [list | add <url> | remove <url>] Manage the node's peers
         """);
 }

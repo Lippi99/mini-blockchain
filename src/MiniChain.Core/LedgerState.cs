@@ -22,6 +22,17 @@ public sealed class LedgerState
 
     public bool ContainsTransaction(string id) => _transactionIds.Contains(id);
 
+    internal LedgerState Clone()
+    {
+        var clone = new LedgerState();
+        foreach (var (address, balance) in _balances)
+            clone._balances[address] = balance;
+        foreach (var (address, nonce) in _nonces)
+            clone._nonces[address] = nonce;
+        clone._transactionIds.UnionWith(_transactionIds);
+        return clone;
+    }
+
     /// <summary>
     /// Checks every transaction in <paramref name="block"/> against this state and applies them, all
     /// or nothing: if any rule fails, the state is left untouched.

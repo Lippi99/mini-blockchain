@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace MiniChain.Core;
 
 /// <summary>
@@ -8,6 +10,12 @@ public static class ProofOfWork
 {
     /// <summary>A SHA-256 hash has 64 hex digits, so no difficulty above this can ever be met.</summary>
     public const int MaxDifficulty = 64;
+
+    /// <summary>
+    /// The expected number of hashes needed to mine a block at <paramref name="difficulty"/>: 16^difficulty.
+    /// Summed over a chain this is its cumulative work, which consensus compares.
+    /// </summary>
+    public static BigInteger Work(int difficulty) => BigInteger.One << (4 * difficulty);
 
     /// <summary>Checks the leading zeros of a hex-encoded hash.</summary>
     public static bool MeetsDifficulty(string hash, int difficulty)

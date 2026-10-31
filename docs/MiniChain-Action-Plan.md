@@ -474,9 +474,9 @@ Each node is an instance of `MiniChain.Node` running on its own port. It holds:
 
 ### Done when
 
-- [ ] Three nodes stay in sync while transactions are sent to random nodes
-- [ ] The network-split experiment resolves correctly
-- [ ] Integration tests start nodes with `WebApplicationFactory<Program>` and check that they sync
+- [x] Three nodes stay in sync while transactions are sent to random nodes
+- [x] The network-split experiment resolves correctly
+- [x] Integration tests start nodes with `WebApplicationFactory<Program>` and check that they sync
 
 ---
 

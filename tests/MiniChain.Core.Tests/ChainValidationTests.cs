@@ -154,6 +154,29 @@ public class ChainValidationTests
     }
 
     [Fact]
+    public void ValidateProofOfWork_checks_a_block_without_its_chain()
+    {
+        var chain = TestChains.Create(blocks: 1, difficulty: 2);
+        Assert.True(ChainValidator.ValidateProofOfWork(chain.Blocks[1], chain.Parameters, out var error), error);
+
+        var unmined = TestChains.NextBlock(chain.Blocks, difficulty: 2);
+        TestChains.HashWithoutMining(unmined);
+        Assert.False(ChainValidator.ValidateProofOfWork(unmined, chain.Parameters, out error));
+        Assert.Contains("never mined", error);
+
+        var tooEasy = TestChains.NextBlock(chain.Blocks, difficulty: 1);
+        Miner.MineSequential(tooEasy);
+        Assert.False(ChainValidator.ValidateProofOfWork(tooEasy, chain.Parameters, out error));
+        Assert.Contains("not possible on this network", error);
+
+        var wrongHash = TestChains.NextBlock(chain.Blocks, difficulty: 2);
+        Miner.MineSequential(wrongHash);
+        wrongHash.Hash = "00" + new string('f', 62);
+        Assert.False(ChainValidator.ValidateProofOfWork(wrongHash, chain.Parameters, out error));
+        Assert.Contains("does not match the block's contents", error);
+    }
+
+    [Fact]
     public void An_empty_chain_is_invalid()
     {
         Assert.False(ChainValidator.ValidateChain([], ChainParameters.Default, out var error));

@@ -17,6 +17,8 @@ try
             return TamperDemo.Run();
         case "bench":
             return Benchmark.Run(options);
+        case "ledger":
+            return LedgerDemo.Run();
         default:
             Console.Error.WriteLine($"Unknown command '{args[0]}'.");
             PrintHelp();
@@ -37,8 +39,9 @@ static void PrintHelp()
         Usage: dotnet run --project src/MiniChain.Cli -- <command> [options]
 
         Commands:
-          demo      Build a small chain and print it
-          tamper    Change a block and watch validation detect it
+          demo      Mine a small chain with a few payments and print it
+          tamper    Rewrite a block and watch validation detect it
           bench     Benchmark the miners [--max-difficulty 6] [--samples 3]
+          ledger    Try to overspend, double spend and replay, and watch each attempt fail
         """);
 }

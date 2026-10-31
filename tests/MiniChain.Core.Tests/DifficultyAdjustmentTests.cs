@@ -79,12 +79,12 @@ public class DifficultyAdjustmentTests
         };
         var chain = new Blockchain(parameters);
         for (var i = 1; i <= 5; i++)
-            chain.AddBlock(new Block { Timestamp = Genesis.Timestamp + i, Transactions = [$"fast block {i}"] });
+            TestChains.MineBlockAt(chain, Genesis.Timestamp + i, TestAccounts.Miner);
 
         Assert.True(chain.IsValid(out var error), error);
         Assert.Equal([1, 1, 2, 2, 3], chain.Blocks.Skip(1).Select(b => b.Difficulty));
 
-        var cheap = TestChains.NextBlock(chain.Blocks.Take(3).ToList(), difficulty: 1, "ignores the retarget");
+        var cheap = TestChains.NextBlock(chain.Blocks.Take(3).ToList(), difficulty: 1);
         Miner.MineSequential(cheap);
         Assert.False(ChainValidator.ValidateChain([.. chain.Blocks.Take(3), cheap], parameters, out error));
         Assert.Equal("Block #3: the difficulty is 1, but the network expects 2.", error);

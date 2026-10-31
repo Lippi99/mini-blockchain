@@ -6,8 +6,9 @@ namespace MiniChain.Core;
 public static class ChainValidator
 {
     /// <summary>
-    /// Validates a whole chain: it must start with the expected genesis block, and every later
-    /// block must pass <see cref="ValidateBlock"/> against the block before it.
+    /// Validates a whole chain: it must start with the expected genesis block, every later block must
+    /// pass <see cref="ValidateBlock"/> against the block before it, and replaying all transactions
+    /// from scratch must follow the transaction rules.
     /// </summary>
     public static bool ValidateChain(IReadOnlyList<Block> blocks, ChainParameters parameters, [NotNullWhen(false)] out string? error)
     {
@@ -24,10 +25,12 @@ public static class ChainValidator
             return false;
         }
 
+        var ledger = new LedgerState();
         for (var i = 1; i < blocks.Count; i++)
         {
             var expectedDifficulty = DifficultyAdjustment.ExpectedDifficulty(blocks, i, parameters);
-            if (!ValidateBlock(blocks[i], blocks[i - 1], expectedDifficulty, out var blockError))
+            if (!ValidateBlock(blocks[i], blocks[i - 1], expectedDifficulty, out var blockError) ||
+                !ledger.TryApplyBlock(blocks[i], parameters, out blockError))
             {
                 error = $"Block #{i}: {blockError}";
                 return false;
@@ -39,11 +42,19 @@ public static class ChainValidator
     }
 
     /// <summary>
-    /// Checks that <paramref name="block"/> is intact, correctly linked to <paramref name="previous"/>
-    /// and carries a valid proof of work.
+    /// Checks that <paramref name="block"/>'s header is intact, correctly linked to
+    /// <paramref name="previous"/> and carries a valid proof of work. Transactions are checked by
+    /// <see cref="LedgerState"/>.
     /// </summary>
     public static bool ValidateBlock(Block block, Block previous, int expectedDifficulty, [NotNullWhen(false)] out string? error)
     {
+        // Blocks can arrive from the network, so do not trust that required fields are present.
+        if (block.PreviousHash is null || block.Hash is null || block.Transactions is null || block.Transactions.Any(t => t is null))
+        {
+            error = "the block is malformed: a required field is missing.";
+            return false;
+        }
+
         var computedHash = block.ComputeHash();
         if (block.Hash != computedHash)
             error = $"the stored hash {block.Hash} does not match the block's contents (computed {computedHash}).";

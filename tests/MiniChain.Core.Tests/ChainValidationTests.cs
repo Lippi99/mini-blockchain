@@ -22,7 +22,7 @@ public class ChainValidationTests
     {
         var chain = TestChains.Create(blocks: 3);
 
-        chain.Blocks[1].Transactions = ["payment 1000"];
+        TestChains.ChangeReward(chain.Blocks[1], 49);
 
         Assert.False(chain.IsValid(out var error));
         Assert.StartsWith("Block #1:", error);
@@ -34,7 +34,7 @@ public class ChainValidationTests
     {
         var chain = TestChains.Create(blocks: 3);
 
-        chain.Blocks[1].Transactions = ["payment 1000"];
+        TestChains.ChangeReward(chain.Blocks[1], 49);
         TestChains.HashWithoutMining(chain.Blocks[1]);
 
         Assert.False(chain.IsValid(out var error));
@@ -47,7 +47,7 @@ public class ChainValidationTests
     {
         var chain = TestChains.Create(blocks: 3);
 
-        chain.Blocks[1].Transactions = ["payment 1000"];
+        TestChains.ChangeReward(chain.Blocks[1], 49);
         Miner.MineSequential(chain.Blocks[1]);
 
         Assert.False(chain.IsValid(out var error));
@@ -100,8 +100,8 @@ public class ChainValidationTests
     [Fact]
     public void Rule4_an_equal_timestamp_is_allowed()
     {
-        var chain = TestChains.Create();
-        chain.AddBlock(new Block { Timestamp = Genesis.Timestamp, Transactions = ["same millisecond"] });
+        var chain = TestChains.Create(blocks: 1);
+        TestChains.MineBlockAt(chain, chain.LatestBlock.Timestamp, TestAccounts.Miner);
 
         Assert.True(chain.IsValid(out _));
     }
@@ -110,7 +110,7 @@ public class ChainValidationTests
     public void A_block_that_was_never_mined_fails_validation()
     {
         var chain = TestChains.Create(blocks: 2, difficulty: 2);
-        var block = TestChains.NextBlock(chain.Blocks, difficulty: 2, "unmined");
+        var block = TestChains.NextBlock(chain.Blocks, difficulty: 2);
         TestChains.HashWithoutMining(block);
 
         Assert.False(ChainValidator.ValidateChain([.. chain.Blocks, block], chain.Parameters, out var error));
@@ -122,7 +122,7 @@ public class ChainValidationTests
     public void A_block_mined_below_the_network_difficulty_is_rejected()
     {
         var chain = TestChains.Create(blocks: 2, difficulty: 2);
-        var cheap = TestChains.NextBlock(chain.Blocks, difficulty: 1, "cheap block");
+        var cheap = TestChains.NextBlock(chain.Blocks, difficulty: 1);
         Miner.MineSequential(cheap);
 
         Assert.False(ChainValidator.ValidateChain([.. chain.Blocks, cheap], chain.Parameters, out var error));
@@ -135,11 +135,22 @@ public class ChainValidationTests
         var chain = TestChains.Create(blocks: 3);
         var genesis = chain.Blocks[0];
 
-        genesis.Transactions = ["premine 1000000 to Mallory"];
+        genesis.Transactions = [Transaction.CreateCoinbase(TestAccounts.Alice.Address, 1_000_000, 0, Genesis.Timestamp)];
         genesis.Hash = genesis.ComputeHash();
 
         Assert.False(chain.IsValid(out var error));
         Assert.Equal("Block #0 is not the expected genesis block.", error);
+    }
+
+    [Fact]
+    public void A_block_with_missing_fields_is_rejected_without_crashing()
+    {
+        var chain = TestChains.Create(blocks: 1);
+        var block = TestChains.NextBlock(chain.Blocks, difficulty: 1);
+        block.Transactions = [null!];
+
+        Assert.False(ChainValidator.ValidateChain([.. chain.Blocks, block], chain.Parameters, out var error));
+        Assert.Equal("Block #2: the block is malformed: a required field is missing.", error);
     }
 
     [Fact]

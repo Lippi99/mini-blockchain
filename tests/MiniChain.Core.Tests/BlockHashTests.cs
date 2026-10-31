@@ -4,12 +4,20 @@ namespace MiniChain.Core.Tests;
 
 public class BlockHashTests
 {
+    private static readonly string AddressOne = new('1', 40);
+    private static readonly string AddressTwo = new('2', 40);
+    private static readonly string AddressThree = new('3', 40);
+
     private static Block SampleBlock() => new()
     {
         Index = 1,
         Timestamp = 1_767_225_600_000,
         PreviousHash = "abc123",
-        Transactions = ["alice pays bob 5", "bob pays carol 2"],
+        Transactions =
+        [
+            Transaction.Create(AddressOne, AddressTwo, amount: 5, fee: 1, nonce: 1, timestamp: 1_767_225_600_000),
+            Transaction.Create(AddressTwo, AddressThree, amount: 2, fee: 0, nonce: 1, timestamp: 1_767_225_600_001),
+        ],
         Difficulty = 2,
         Nonce = 42,
     };
@@ -26,14 +34,14 @@ public class BlockHashTests
     [Fact]
     public void The_hash_matches_the_canonical_header_format()
     {
-        // Computed outside .NET with `sha256sum` over
-        // "1|1767225600000|abc123|{TransactionsHash}|2|42", where TransactionsHash is the
-        // SHA-256 of the concatenated SHA-256 hex of each transaction. If this test fails, the
-        // header format changed and every existing chain would stop validating.
+        // Computed outside .NET with `sha256sum`. Each transaction contributes
+        // SHA-256("{id}|{signature}"), TransactionsHash is the SHA-256 of those hashes concatenated,
+        // and the block hash is the SHA-256 of "1|1767225600000|abc123|{TransactionsHash}|2|42".
+        // If this test fails, the format changed and every existing chain would stop validating.
         var block = SampleBlock();
 
-        Assert.Equal("bd44ad56c327185683b371fca94b1dacec2e1037826df907d456b36e92a9a42d", block.ComputeTransactionsHash());
-        Assert.Equal("59383c77ce555b1544a6ff339df88d98c5f841ac7e7cc429def453c7e4bafe24", block.ComputeHash());
+        Assert.Equal("96a79bec6c7344463e097f022883bf86f8f6afccf746bc84b3e353823950d075", block.ComputeTransactionsHash());
+        Assert.Equal("7ce86f7c7559e70b02a9037cf1fd1c4e06a632704c7057cf020a97374169dbdf", block.ComputeHash());
     }
 
     public static TheoryData<string, Action<Block>> FieldChanges => new()
@@ -41,10 +49,11 @@ public class BlockHashTests
         { "Index", b => b.Index++ },
         { "Timestamp", b => b.Timestamp++ },
         { "PreviousHash", b => b.PreviousHash = "abc124" },
-        { "Transaction content", b => b.Transactions = ["alice pays bob 6", "bob pays carol 2"] },
-        { "Transaction order", b => b.Transactions = ["bob pays carol 2", "alice pays bob 5"] },
-        { "Transaction added", b => b.Transactions = [.. b.Transactions, "carol pays dave 1"] },
-        { "Transaction removed", b => b.Transactions = ["alice pays bob 5"] },
+        { "Transaction amount", b => b.Transactions = [b.Transactions[0] with { Amount = 6 }, b.Transactions[1]] },
+        { "Transaction signature", b => b.Transactions = [b.Transactions[0] with { Signature = "ab" }, b.Transactions[1]] },
+        { "Transaction order", b => b.Transactions = [b.Transactions[1], b.Transactions[0]] },
+        { "Transaction removed", b => b.Transactions = [b.Transactions[0]] },
+        { "Transaction added", b => b.Transactions = [.. b.Transactions, Transaction.Create(AddressThree, AddressOne, 1, 0, 1, 0)] },
         { "Difficulty", b => b.Difficulty++ },
         { "Nonce", b => b.Nonce++ },
     };
@@ -62,6 +71,19 @@ public class BlockHashTests
     }
 
     [Fact]
+    public void A_transaction_edited_without_updating_its_stored_id_still_changes_the_hash()
+    {
+        // The block hash uses each transaction's recomputed id, not the stored one.
+        var block = SampleBlock();
+        var before = block.ComputeHash();
+
+        block.Transactions = [block.Transactions[0] with { Amount = 500 }, block.Transactions[1]];
+
+        Assert.Equal(SampleBlock().Transactions[0].Id, block.Transactions[0].Id);
+        Assert.NotEqual(before, block.ComputeHash());
+    }
+
+    [Fact]
     public void The_stored_hash_is_not_part_of_the_hashed_header()
     {
         var block = SampleBlock();
@@ -70,17 +92,6 @@ public class BlockHashTests
         block.Hash = "anything";
 
         Assert.Equal(before, block.ComputeHash());
-    }
-
-    [Fact]
-    public void Joining_transactions_cannot_collide_with_a_single_transaction()
-    {
-        var two = SampleBlock();
-        two.Transactions = ["a", "b"];
-        var one = SampleBlock();
-        one.Transactions = ["ab"];
-
-        Assert.NotEqual(one.ComputeHash(), two.ComputeHash());
     }
 
     [Fact]

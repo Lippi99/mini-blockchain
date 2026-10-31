@@ -50,10 +50,10 @@ internal static class Benchmark
     private static Block Candidate(int difficulty, int sample) => new()
     {
         Index = 1,
-        Timestamp = Genesis.Timestamp,
+        Timestamp = Genesis.Timestamp + sample,
         PreviousHash = Genesis.Hash,
         Difficulty = difficulty,
-        Transactions = [$"benchmark block {sample}"],
+        Transactions = [Transaction.CreateCoinbase(new string('a', Address.Length), 50, blockIndex: 1, Genesis.Timestamp + sample)],
     };
 
     private static TimeSpan Time(Func<Block> mine, out long nonce)

@@ -40,7 +40,7 @@ public class BlockchainTests
     }
 
     [Fact]
-    public void AddBlock_links_the_block_to_the_previous_one()
+    public void Each_block_is_linked_to_the_previous_one()
     {
         var chain = TestChains.Create(blocks: 3);
 
@@ -56,14 +56,43 @@ public class BlockchainTests
     }
 
     [Fact]
-    public void AddBlock_mines_the_block_at_the_network_difficulty()
+    public void AddBlock_links_mines_and_validates_the_block()
     {
-        var chain = TestChains.Create(blocks: 2, difficulty: 2);
-
-        Assert.All(chain.Blocks.Skip(1), block =>
+        var chain = TestChains.Create(difficulty: 2);
+        var block = new Block
         {
-            Assert.Equal(2, block.Difficulty);
-            Assert.StartsWith("00", block.Hash);
-        });
+            Timestamp = Genesis.Timestamp + 1,
+            Transactions = [Transaction.CreateCoinbase(TestAccounts.Miner.Address, 50, blockIndex: 1, Genesis.Timestamp + 1)],
+        };
+
+        chain.AddBlock(block);
+
+        Assert.Same(block, chain.LatestBlock);
+        Assert.Equal(1, block.Index);
+        Assert.Equal(Genesis.Hash, block.PreviousHash);
+        Assert.Equal(2, block.Difficulty);
+        Assert.StartsWith("00", block.Hash);
+    }
+
+    [Fact]
+    public void AddBlock_throws_for_an_invalid_block()
+    {
+        var chain = TestChains.Create();
+
+        var error = Assert.Throws<InvalidOperationException>(() => chain.AddBlock(new Block { Timestamp = Genesis.Timestamp }));
+
+        Assert.Contains("no coinbase", error.Message);
+        Assert.Single(chain.Blocks);
+    }
+
+    [Fact]
+    public void Candidate_blocks_are_never_older_than_the_tip()
+    {
+        var chain = TestChains.Create(blocks: 1);
+
+        var candidate = chain.CreateCandidateBlock(TestAccounts.Miner.Address, [], timestamp: Genesis.Timestamp - 5000);
+
+        Assert.Equal(chain.LatestBlock.Timestamp, candidate.Timestamp);
+        Assert.Equal(candidate.Timestamp, candidate.Transactions[0].Timestamp);
     }
 }

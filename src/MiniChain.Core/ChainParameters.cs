@@ -17,6 +17,24 @@ public sealed record ChainParameters
             : throw new ArgumentOutOfRangeException(nameof(Difficulty), value, $"Must be between 0 and {ProofOfWork.MaxDifficulty}.");
     } = 4;
 
+    /// <summary>New coins a miner may pay itself in each block's coinbase, on top of the fees.</summary>
+    public long BlockReward
+    {
+        get;
+        init => field = value > 0
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(BlockReward), value, "Must be positive.");
+    } = 50;
+
+    /// <summary>How many transactions a block may hold besides its coinbase.</summary>
+    public int MaxTransactionsPerBlock
+    {
+        get;
+        init => field = value >= 0
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(MaxTransactionsPerBlock), value, "Cannot be negative.");
+    } = 100;
+
     /// <summary>Retarget the difficulty every <see cref="AdjustmentInterval"/> blocks. Off by default.</summary>
     public bool AdjustDifficulty { get; init; }
 

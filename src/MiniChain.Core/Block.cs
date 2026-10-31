@@ -19,8 +19,8 @@ public sealed class Block
     /// <summary>Hash of the previous block.</summary>
     public string PreviousHash { get; set; } = "";
 
-    /// <summary>The payload. Plain strings for now; real transactions arrive in Phase 6.</summary>
-    public IReadOnlyList<string> Transactions { get; set; } = [];
+    /// <summary>The payload. The first transaction is always the coinbase that pays the miner.</summary>
+    public IReadOnlyList<Transaction> Transactions { get; set; } = [];
 
     /// <summary>Required number of leading zero hex characters in <see cref="Hash"/>.</summary>
     public int Difficulty { get; set; }
@@ -32,15 +32,16 @@ public sealed class Block
     public string Hash { get; set; } = "";
 
     /// <summary>
-    /// Hashes the payload in a fixed order. Each transaction is hashed on its own and the
-    /// concatenation of those fixed-length hashes is hashed again, so no separator character can
-    /// make two different lists produce the same input.
+    /// Hashes the payload in a fixed order. Each transaction is hashed on its own from its
+    /// <em>recomputed</em> id plus its signature, so changing any field of any transaction changes
+    /// the block hash. The concatenation of those fixed-length hashes is hashed again, so no separator
+    /// character can make two different lists produce the same input.
     /// </summary>
     public string ComputeTransactionsHash()
     {
         var builder = new StringBuilder(Transactions.Count * 64);
         foreach (var transaction in Transactions)
-            builder.Append(HashUtil.Sha256Hex(transaction));
+            builder.Append(HashUtil.Sha256Hex($"{transaction.ComputeId()}|{transaction.Signature}"));
         return HashUtil.Sha256Hex(builder.ToString());
     }
 

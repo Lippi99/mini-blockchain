@@ -361,8 +361,8 @@ A block is only accepted if its hash starts with `Difficulty` zeros. The only wa
 
 ### Done when
 
-- [ ] Balances are correct after several mined blocks
-- [ ] Unit tests cover every validation rule, including double spends and replays
+- [x] Balances are correct after several mined blocks
+- [x] Unit tests cover every validation rule, including double spends and replays
 
 ---
 

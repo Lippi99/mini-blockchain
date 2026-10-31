@@ -2,13 +2,13 @@ namespace MiniChain.Core.Tests;
 
 public class MinerTests
 {
-    private static Block Candidate(int difficulty, string payload = "payload") => new()
+    private static Block Candidate(int difficulty, int sample = 0) => new()
     {
         Index = 1,
         Timestamp = Genesis.Timestamp + 1,
         PreviousHash = Genesis.Hash,
         Difficulty = difficulty,
-        Transactions = [payload],
+        Transactions = [Transaction.CreateCoinbase(TestAccounts.Miner.Address, 50, blockIndex: 1, Genesis.Timestamp + sample)],
     };
 
     [Theory]
@@ -32,10 +32,9 @@ public class MinerTests
     {
         for (var sample = 0; sample < 5; sample++)
         {
-            var payload = $"sample {sample}";
-            var naive = Miner.Mine(Candidate(difficulty, payload));
-            var sequential = Miner.MineSequential(Candidate(difficulty, payload));
-            var parallel = Miner.MineParallel(Candidate(difficulty, payload));
+            var naive = Miner.Mine(Candidate(difficulty, sample));
+            var sequential = Miner.MineSequential(Candidate(difficulty, sample));
+            var parallel = Miner.MineParallel(Candidate(difficulty, sample));
 
             Assert.Equal(naive.Nonce, sequential.Nonce);
             Assert.Equal(naive.Hash, sequential.Hash);

@@ -213,8 +213,8 @@ Add these to each `.csproj`, or to a shared `Directory.Build.props` file at the 
 
 ### Done when
 
-- [ ] Unit test: the same block always produces the same hash
-- [ ] Unit test: changing any single field changes the hash
+- [x] Unit test: the same block always produces the same hash
+- [x] Unit test: changing any single field changes the hash
 
 ---
 

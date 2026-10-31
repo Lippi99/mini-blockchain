@@ -9,7 +9,7 @@ public static class ChainValidator
     /// Validates a whole chain: it must start with the expected genesis block, and every later
     /// block must pass <see cref="ValidateBlock"/> against the block before it.
     /// </summary>
-    public static bool ValidateChain(IReadOnlyList<Block> blocks, [NotNullWhen(false)] out string? error)
+    public static bool ValidateChain(IReadOnlyList<Block> blocks, ChainParameters parameters, [NotNullWhen(false)] out string? error)
     {
         if (blocks.Count == 0)
         {
@@ -26,7 +26,8 @@ public static class ChainValidator
 
         for (var i = 1; i < blocks.Count; i++)
         {
-            if (!ValidateBlock(blocks[i], blocks[i - 1], out var blockError))
+            var expectedDifficulty = DifficultyAdjustment.ExpectedDifficulty(blocks, i, parameters);
+            if (!ValidateBlock(blocks[i], blocks[i - 1], expectedDifficulty, out var blockError))
             {
                 error = $"Block #{i}: {blockError}";
                 return false;
@@ -37,8 +38,11 @@ public static class ChainValidator
         return true;
     }
 
-    /// <summary>Checks that <paramref name="block"/> is intact and correctly linked to <paramref name="previous"/>.</summary>
-    public static bool ValidateBlock(Block block, Block previous, [NotNullWhen(false)] out string? error)
+    /// <summary>
+    /// Checks that <paramref name="block"/> is intact, correctly linked to <paramref name="previous"/>
+    /// and carries a valid proof of work.
+    /// </summary>
+    public static bool ValidateBlock(Block block, Block previous, int expectedDifficulty, [NotNullWhen(false)] out string? error)
     {
         var computedHash = block.ComputeHash();
         if (block.Hash != computedHash)
@@ -49,6 +53,10 @@ public static class ChainValidator
             error = $"the index is {block.Index}, expected {previous.Index + 1}.";
         else if (block.Timestamp < previous.Timestamp)
             error = $"the timestamp {block.Timestamp} is earlier than the previous block's timestamp {previous.Timestamp}.";
+        else if (block.Difficulty != expectedDifficulty)
+            error = $"the difficulty is {block.Difficulty}, but the network expects {expectedDifficulty}.";
+        else if (!ProofOfWork.MeetsDifficulty(block.Hash, block.Difficulty))
+            error = $"the hash does not start with {block.Difficulty} zeros, so the block was never mined.";
         else
             error = null;
 

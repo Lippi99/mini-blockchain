@@ -309,9 +309,9 @@ A block is only accepted if its hash starts with `Difficulty` zeros. The only wa
 
 ### Done when
 
-- [ ] Mined blocks pass validation; blocks that were not mined fail it
-- [ ] A benchmark table (difficulty, time, hash rate) is recorded in the README
-- [ ] The parallel miner is measurably faster on a multi-core machine
+- [x] Mined blocks pass validation; blocks that were not mined fail it
+- [x] A benchmark table (difficulty, time, hash rate) is recorded in the README
+- [x] The parallel miner is measurably faster on a multi-core machine
 
 ---
 

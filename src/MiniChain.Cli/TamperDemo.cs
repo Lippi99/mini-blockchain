@@ -2,7 +2,7 @@ using MiniChain.Core;
 
 namespace MiniChain.Cli;
 
-/// <summary>The Phase 4 experiment: change history and watch validation catch it.</summary>
+/// <summary>The Phase 4 experiment, extended with proof of work: change history and watch validation catch it.</summary>
 internal static class TamperDemo
 {
     public static int Run()
@@ -11,16 +11,28 @@ internal static class TamperDemo
         foreach (var payment in new[] { "Alice pays Bob 5", "Bob pays Carol 2", "Carol pays Dave 1" })
             chain.AddBlock(new Block { Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), Transactions = [payment] });
 
-        Report(1, "Build a valid chain of 4 blocks.", chain);
+        Report(1, $"Build a valid chain of 4 blocks, mined at difficulty {chain.Parameters.Difficulty}.", chain);
 
-        chain.Blocks[1].Transactions = ["Alice pays Bob 500"];
+        var block1 = chain.Blocks[1];
+        block1.Transactions = ["Alice pays Bob 500"];
         Report(2, "Change the transaction inside block #1 to \"Alice pays Bob 500\".", chain);
 
-        chain.Blocks[1].Hash = chain.Blocks[1].ComputeHash();
+        block1.Hash = block1.ComputeHash();
         Report(3, "Recompute block #1's hash to hide the change.", chain);
 
-        Console.WriteLine("Fixing one block always breaks the link from the block after it, so a forger has to");
-        Console.WriteLine("rewrite every later block too.");
+        Miner.MineParallel(block1);
+        Report(4, "Re-mine block #1 so its hash has the required zeros again.", chain);
+
+        for (var i = 2; i < chain.Blocks.Count; i++)
+        {
+            chain.Blocks[i].PreviousHash = chain.Blocks[i - 1].Hash;
+            Miner.MineParallel(chain.Blocks[i]);
+        }
+        Report(5, "Re-link and re-mine every block after it.", chain);
+
+        Console.WriteLine("Rewriting one block means redoing the proof of work for that block and every block after");
+        Console.WriteLine("it. On a real network the honest nodes keep extending their chain in the meantime, so the");
+        Console.WriteLine("forger has to out-mine all of them to catch up.");
         return 0;
     }
 

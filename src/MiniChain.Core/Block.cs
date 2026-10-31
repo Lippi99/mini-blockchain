@@ -45,10 +45,15 @@ public sealed class Block
     }
 
     /// <summary>
-    /// Hashes the canonical header <c>{Index}|{Timestamp}|{PreviousHash}|{TransactionsHash}|{Difficulty}|{Nonce}</c>.
+    /// The canonical header without the nonce: <c>{Index}|{Timestamp}|{PreviousHash}|{TransactionsHash}|{Difficulty}|</c>.
+    /// The nonce comes last so a miner can build these bytes once and only append the nonce on each attempt.
     /// Numbers are formatted with the invariant culture so every node builds exactly the same string.
     /// </summary>
+    public string ComputeHeaderPrefix() =>
+        string.Create(CultureInfo.InvariantCulture,
+            $"{Index}|{Timestamp}|{PreviousHash}|{ComputeTransactionsHash()}|{Difficulty}|");
+
+    /// <summary>Hashes the canonical header <c>{Index}|{Timestamp}|{PreviousHash}|{TransactionsHash}|{Difficulty}|{Nonce}</c>.</summary>
     public string ComputeHash() =>
-        HashUtil.Sha256Hex(string.Create(CultureInfo.InvariantCulture,
-            $"{Index}|{Timestamp}|{PreviousHash}|{ComputeTransactionsHash()}|{Difficulty}|{Nonce}"));
+        HashUtil.Sha256Hex(ComputeHeaderPrefix() + Nonce.ToString(CultureInfo.InvariantCulture));
 }

@@ -24,7 +24,7 @@ public class BlockchainTests
 
         Assert.Equal(expected, Genesis.Hash);
         Assert.Equal(expected, new Blockchain().Blocks[0].Hash);
-        Assert.Equal(expected, new Blockchain().Blocks[0].Hash);
+        Assert.Equal(expected, new Blockchain(new ChainParameters { Difficulty = 6 }).Blocks[0].Hash);
     }
 
     [Fact]
@@ -42,10 +42,7 @@ public class BlockchainTests
     [Fact]
     public void AddBlock_links_the_block_to_the_previous_one()
     {
-        var chain = new Blockchain();
-
-        for (var i = 1; i <= 3; i++)
-            chain.AddBlock(new Block { Timestamp = Genesis.Timestamp + i, Transactions = [$"payment {i}"] });
+        var chain = TestChains.Create(blocks: 3);
 
         Assert.Equal(4, chain.Blocks.Count);
         for (var i = 1; i < chain.Blocks.Count; i++)
@@ -56,5 +53,17 @@ public class BlockchainTests
             Assert.Equal(block.ComputeHash(), block.Hash);
         }
         Assert.Same(chain.Blocks[^1], chain.LatestBlock);
+    }
+
+    [Fact]
+    public void AddBlock_mines_the_block_at_the_network_difficulty()
+    {
+        var chain = TestChains.Create(blocks: 2, difficulty: 2);
+
+        Assert.All(chain.Blocks.Skip(1), block =>
+        {
+            Assert.Equal(2, block.Difficulty);
+            Assert.StartsWith("00", block.Hash);
+        });
     }
 }

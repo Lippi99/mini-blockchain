@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MiniChain.Cli/MiniChain.Cli.csproj" />
+    <Project Path="src/MiniChain.Core/MiniChain.Core.csproj" />
+    <Project Path="src/MiniChain.Node/MiniChain.Node.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MiniChain.Core.Tests/MiniChain.Core.Tests.csproj" />
+    <Project Path="tests/MiniChain.Node.Tests/MiniChain.Node.Tests.csproj" />
+  </Folder>
+</Solution>

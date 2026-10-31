@@ -47,7 +47,8 @@ public class TransactionValidatorTests
         { "zero amount", Transaction.CreateCoinbase(Bob.Address, 0, 3, 0), "amount must be greater than zero" },
         { "pays a fee", Transaction.Create(Transaction.CoinbaseSender, Bob.Address, 50, 1, 3, 0), "pays no fee" },
         { "wrong nonce", Transaction.CreateCoinbase(Bob.Address, 50, 4, 0), "must equal the block index 3" },
-        { "signed", Transaction.CreateCoinbase(Bob.Address, 50, 3, 0) with { Signature = "ab" }, "not signed" },
+        { "signed", Transaction.CreateCoinbase(Bob.Address, 50, 3, 0) with { Signature = "ab" }, "no public key or signature" },
+        { "has a public key", Transaction.CreateCoinbase(Bob.Address, 50, 3, 0) with { PublicKey = "ab" }, "no public key or signature" },
         { "edited after creation", Transaction.CreateCoinbase(Bob.Address, 50, 3, 0) with { Amount = 5000 }, "id does not match" },
     };
 

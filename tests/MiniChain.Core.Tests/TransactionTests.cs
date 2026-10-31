@@ -11,10 +11,11 @@ public class TransactionTests
     [Fact]
     public void Create_fills_in_the_id_from_the_canonical_fields()
     {
-        // SHA-256 of "{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}", computed with `sha256sum`.
+        // SHA-256 of "{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}|{PublicKey}" (no public key here),
+        // computed with `sha256sum`.
         var transaction = Sample();
 
-        Assert.Equal("743edfd989c7f732a952194826fa51a7b10d96c690386a5a87c1e902d3ca9b4e", transaction.Id);
+        Assert.Equal("e7875059800348132e7854f1cf602fbda77eb70b642069a2e3427dc6d1cc3b4e", transaction.Id);
         Assert.Equal(transaction.ComputeId(), transaction.Id);
     }
 

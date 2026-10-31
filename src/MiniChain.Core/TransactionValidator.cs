@@ -8,7 +8,7 @@ namespace MiniChain.Core;
 /// </summary>
 public static class TransactionValidator
 {
-    /// <summary>Validates a regular transfer.</summary>
+    /// <summary>Validates a regular transfer, including its signature.</summary>
     public static bool Validate(Transaction transaction, [NotNullWhen(false)] out string? error)
     {
         if (transaction.IsCoinbase)
@@ -28,7 +28,8 @@ public static class TransactionValidator
         else
             error = null;
 
-        return error is null;
+        // The signature is checked last because it is by far the most expensive check.
+        return error is null && SignatureVerifier.Verify(transaction, out error);
     }
 
     /// <summary>
@@ -47,8 +48,8 @@ public static class TransactionValidator
             error = "a coinbase pays no fee.";
         else if (transaction.Nonce != blockIndex)
             error = $"the coinbase nonce must equal the block index {blockIndex}.";
-        else if (transaction.Signature is not null)
-            error = "a coinbase is not signed.";
+        else if (transaction.Signature is not null || transaction.PublicKey is not null)
+            error = "a coinbase has no public key or signature.";
         else if (transaction.Id != transaction.ComputeId())
             error = "the coinbase id does not match its contents.";
         else

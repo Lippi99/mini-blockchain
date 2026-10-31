@@ -413,7 +413,7 @@ A block is only accepted if its hash starts with `Difficulty` zeros. The only wa
 
 ### Done when
 
-- [ ] Unsigned or forged transactions are always rejected
+- [x] Unsigned or forged transactions are always rejected
 - [ ] Private keys never appear in logs, API responses or Git history
 
 ---

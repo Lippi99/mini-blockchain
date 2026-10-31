@@ -2,25 +2,25 @@ using MiniChain.Core;
 
 namespace MiniChain.Cli;
 
-/// <summary>Mines a small chain with a few payments and prints it with the resulting balances.</summary>
+/// <summary>Mines a small chain with a few signed payments and prints it with the resulting balances.</summary>
 internal static class ChainDemo
 {
     public static int Run()
     {
         var chain = new Blockchain();
         var mempool = new Mempool();
-        var accounts = new DemoAccounts();
+        using var accounts = new DemoAccounts();
         var (alice, bob, carol) = (accounts["Alice"], accounts["Bob"], accounts["Carol"]);
 
         // Alice mines the first block and earns the reward: the only way new coins appear.
-        chain.MinePendingTransactions(mempool, alice);
+        chain.MinePendingTransactions(mempool, alice.Address);
 
-        Submit(mempool, chain, Transaction.Create(alice, bob, amount: 20, fee: 2, nonce: 1, Now()));
-        Submit(mempool, chain, Transaction.Create(alice, carol, amount: 5, fee: 1, nonce: 2, Now()));
-        chain.MinePendingTransactions(mempool, bob); // Bob earns the reward plus Alice's fees.
+        Submit(mempool, chain, alice.CreateTransaction(bob.Address, amount: 20, fee: 2, nonce: 1, Now()));
+        Submit(mempool, chain, alice.CreateTransaction(carol.Address, amount: 5, fee: 1, nonce: 2, Now()));
+        chain.MinePendingTransactions(mempool, bob.Address); // Bob earns the reward plus Alice's fees.
 
-        Submit(mempool, chain, Transaction.Create(bob, carol, amount: 10, fee: 1, nonce: 1, Now()));
-        chain.MinePendingTransactions(mempool, carol);
+        Submit(mempool, chain, bob.CreateTransaction(carol.Address, amount: 10, fee: 1, nonce: 1, Now()));
+        chain.MinePendingTransactions(mempool, carol.Address);
 
         ConsoleOutput.PrintChain(chain.Blocks, accounts.NameOf);
         ConsoleOutput.PrintBalances(chain, accounts.NameOf);

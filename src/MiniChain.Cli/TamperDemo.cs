@@ -9,19 +9,19 @@ internal static class TamperDemo
     {
         var chain = new Blockchain();
         var mempool = new Mempool();
-        var accounts = new DemoAccounts();
+        using var accounts = new DemoAccounts();
         var (alice, bob, carol, mallory) = (accounts["Alice"], accounts["Bob"], accounts["Carol"], accounts["Mallory"]);
 
-        chain.MinePendingTransactions(mempool, alice);
-        chain.MinePendingTransactions(mempool, bob);
-        mempool.TryAdd(Transaction.Create(bob, carol, amount: 10, fee: 1, nonce: 1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), chain, out _);
-        chain.MinePendingTransactions(mempool, carol);
+        chain.MinePendingTransactions(mempool, alice.Address);
+        chain.MinePendingTransactions(mempool, bob.Address);
+        mempool.TryAdd(bob.CreateTransaction(carol.Address, amount: 10, fee: 1, nonce: 1, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()), chain, out _);
+        chain.MinePendingTransactions(mempool, carol.Address);
 
         Report(1, $"Mine a valid chain of 4 blocks at difficulty {chain.Parameters.Difficulty}. Alice mined block #1.", chain);
 
         var block1 = chain.Blocks[1];
         var reward = block1.Transactions[0];
-        block1.Transactions = [Transaction.CreateCoinbase(mallory, reward.Amount, reward.Nonce, reward.Timestamp)];
+        block1.Transactions = [Transaction.CreateCoinbase(mallory.Address, reward.Amount, reward.Nonce, reward.Timestamp)];
         Report(2, "Mallory rewrites block #1 so that its reward pays her instead of Alice.", chain);
 
         block1.Hash = block1.ComputeHash();

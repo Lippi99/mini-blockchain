@@ -40,8 +40,8 @@ public class BlockHashTests
         // If this test fails, the format changed and every existing chain would stop validating.
         var block = SampleBlock();
 
-        Assert.Equal("96a79bec6c7344463e097f022883bf86f8f6afccf746bc84b3e353823950d075", block.ComputeTransactionsHash());
-        Assert.Equal("7ce86f7c7559e70b02a9037cf1fd1c4e06a632704c7057cf020a97374169dbdf", block.ComputeHash());
+        Assert.Equal("29013c27a11268fc41894f0163241fcb58bb554e4971dfeffb4d35157c9ca183", block.ComputeTransactionsHash());
+        Assert.Equal("39d652b987671d3b4c6bb86ba0cfd8ff8d70005880aaa421ffbd9f59e31333e8", block.ComputeHash());
     }
 
     public static TheoryData<string, Action<Block>> FieldChanges => new()

@@ -480,3 +480,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# MiniChain: private keys and node data must never be committed
+wallets/
+*.pem
+node-data/

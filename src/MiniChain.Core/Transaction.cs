@@ -34,7 +34,13 @@ public sealed record Transaction
     /// <summary>Creation time in Unix milliseconds.</summary>
     public long Timestamp { get; init; }
 
-    /// <summary>Hex-encoded signature over the <see cref="Id"/> bytes. Filled in during Phase 7.</summary>
+    /// <summary>
+    /// The sender's public key (hex-encoded SubjectPublicKeyInfo), so any node can verify the
+    /// signature. Empty for a coinbase.
+    /// </summary>
+    public string? PublicKey { get; init; }
+
+    /// <summary>Hex-encoded ECDSA signature over the <see cref="Id"/> bytes. Empty for a coinbase.</summary>
     public string? Signature { get; init; }
 
     /// <summary>SHA-256 of every field above except the signature.</summary>
@@ -43,11 +49,14 @@ public sealed record Transaction
     [JsonIgnore]
     public bool IsCoinbase => From == CoinbaseSender;
 
-    /// <summary>Hashes the canonical form <c>{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}</c>.</summary>
+    /// <summary>Hashes the canonical form <c>{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}|{PublicKey}</c>.</summary>
     public string ComputeId() =>
-        HashUtil.Sha256Hex(string.Create(CultureInfo.InvariantCulture, $"{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}"));
+        HashUtil.Sha256Hex(string.Create(CultureInfo.InvariantCulture, $"{From}|{To}|{Amount}|{Fee}|{Nonce}|{Timestamp}|{PublicKey}"));
 
-    /// <summary>Creates an unsigned transaction with its <see cref="Id"/> filled in.</summary>
+    /// <summary>
+    /// Creates an unsigned transaction with its <see cref="Id"/> filled in. Only a coinbase is valid
+    /// without a signature; use <see cref="Wallet.CreateTransaction"/> for transfers.
+    /// </summary>
     public static Transaction Create(string from, string to, long amount, long fee, long nonce, long timestamp)
     {
         var transaction = new Transaction { From = from, To = to, Amount = amount, Fee = fee, Nonce = nonce, Timestamp = timestamp };

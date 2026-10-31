@@ -1,0 +1,55 @@
+# Three MiniChain nodes that already know each other.
+#
+#   docker compose up --build
+#
+# From the host they answer on http://localhost:5001, :5002 and :5003. Inside the compose network they
+# reach each other as http://node1:8080 and so on, which is why each node's PublicUrl and Peers use those
+# names. Each node keeps its chain and wallet in its own volume; "docker compose down -v" wipes them.
+
+x-node: &node
+  build: .
+  image: minichain-node
+  restart: unless-stopped
+
+x-settings: &settings
+  MiniChain__Difficulty: "4"
+  MiniChain__Storage: "json"
+  MiniChain__SyncIntervalSeconds: "10"
+  # Uncomment to mine automatically whenever transactions are pending:
+  # MiniChain__AutoMine: "true"
+
+services:
+  node1:
+    <<: *node
+    ports: ["5001:8080"]
+    volumes: ["node1-data:/data"]
+    environment:
+      <<: *settings
+      MiniChain__PublicUrl: "http://node1:8080"
+      MiniChain__Peers__0: "http://node2:8080"
+      MiniChain__Peers__1: "http://node3:8080"
+
+  node2:
+    <<: *node
+    ports: ["5002:8080"]
+    volumes: ["node2-data:/data"]
+    environment:
+      <<: *settings
+      MiniChain__PublicUrl: "http://node2:8080"
+      MiniChain__Peers__0: "http://node1:8080"
+      MiniChain__Peers__1: "http://node3:8080"
+
+  node3:
+    <<: *node
+    ports: ["5003:8080"]
+    volumes: ["node3-data:/data"]
+    environment:
+      <<: *settings
+      MiniChain__PublicUrl: "http://node3:8080"
+      MiniChain__Peers__0: "http://node1:8080"
+      MiniChain__Peers__1: "http://node2:8080"
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:

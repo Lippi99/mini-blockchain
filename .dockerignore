@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/node-data/
+**/wallets/
+**/*.pem
+.git/
+.github/
+.claude/
+.idea/
+.vs/
+docs/
+tests/

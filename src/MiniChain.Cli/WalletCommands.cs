@@ -13,7 +13,7 @@ internal static partial class WalletCommands
 {
     public static int Run(CommandLine options)
     {
-        var action = options.Arguments.FirstOrDefault()
+        var action = options.FirstArgument
             ?? throw new CliUsageException("Usage: wallet new|show [--name <name>] [--password <password>]");
 
         switch (action)

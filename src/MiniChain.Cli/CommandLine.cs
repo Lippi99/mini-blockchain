@@ -16,6 +16,9 @@ internal sealed class CommandLine
 
     public IReadOnlyList<string> Arguments => _arguments;
 
+    /// <summary>The first positional argument, such as the "new" in "wallet new", if there is one.</summary>
+    public string? FirstArgument => _arguments.Count > 0 ? _arguments[0] : null;
+
     public static CommandLine Parse(IReadOnlyList<string> args)
     {
         var result = new CommandLine();

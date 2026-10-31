@@ -111,7 +111,9 @@ public static class Miner
             workers[i] = Task.Factory.StartNew(
                 () => Search(worker), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
-        Task.WaitAll(workers);
+        // Wait for every worker even after a cancellation: they notice it within one hash and stop,
+        // and returning only then guarantees no worker is still running once this method returns.
+        Task.WaitAll(workers, CancellationToken.None);
 
         cancellationToken.ThrowIfCancellationRequested();
         return Finish(candidate, best);

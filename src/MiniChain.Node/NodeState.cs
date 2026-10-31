@@ -24,7 +24,8 @@ public enum ChainAdoption { Replaced, NotBetter, Invalid }
 
 public sealed record TransactionResult(TransactionSubmission Status, string? Error = null);
 
-public sealed record BlockResult(BlockSubmission Status, string? Error = null);
+/// <param name="TipIndex">This node's latest block index when the block was handled.</param>
+public sealed record BlockResult(BlockSubmission Status, string? Error = null, long TipIndex = 0);
 
 /// <param name="Returned">Transactions from discarded blocks that went back into the mempool.</param>
 public sealed record ChainAdoptionResult(
@@ -147,7 +148,7 @@ public sealed class NodeState : IDisposable
             // (this includes a competing block at our next height built on a different parent). It can only
             // be fully checked against its own chain, but it must at least carry real proof of work.
             return ChainValidator.ValidateProofOfWork(block, _chain.Parameters, out var forged)
-                ? new BlockResult(BlockSubmission.Behind)
+                ? new BlockResult(BlockSubmission.Behind, TipIndex: tip.Index)
                 : new BlockResult(BlockSubmission.Rejected, $"Block #{block.Index}: {forged}");
         }
     }

@@ -128,7 +128,7 @@ public static class NodeApi
             case BlockSubmission.Known:
                 return TypedResults.Ok(new BlockReceivedResponse("known"));
             case BlockSubmission.Behind:
-                Log.BlockAhead(logger, block.Index, from ?? "a client", node.GetLatestBlock().Index);
+                Log.BlockAhead(logger, block.Index, from ?? "a client", result.TipIndex);
                 if (from is not null)
                     sync.RequestSync(from);
                 else

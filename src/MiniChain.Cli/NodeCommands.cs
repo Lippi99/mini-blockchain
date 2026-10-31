@@ -78,7 +78,7 @@ internal static class NodeCommands
     public static async Task<int> PeersAsync(CommandLine options)
     {
         using var node = Connect(options);
-        var action = options.Arguments.FirstOrDefault() ?? "list";
+        var action = options.FirstArgument ?? "list";
         switch (action)
         {
             case "list":

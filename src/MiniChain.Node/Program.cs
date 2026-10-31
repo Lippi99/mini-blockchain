@@ -59,7 +59,8 @@ catch (Exception e) when (e is InvalidDataException or InvalidOperationException
     throw;
 }
 
-Log.ChainStorage(app.Logger, app.Services.GetRequiredService<IChainStore>().Location);
+var store = app.Services.GetRequiredService<IChainStore>();
+Log.ChainStorage(app.Logger, store.Location);
 if (identity.WalletPath is not null)
     Log.NodeWallet(app.Logger, identity.WalletPath);
 app.Lifetime.ApplicationStarted.Register(() =>

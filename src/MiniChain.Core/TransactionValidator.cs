@@ -48,7 +48,8 @@ public static class TransactionValidator
             error = "a coinbase pays no fee.";
         else if (transaction.Nonce != blockIndex)
             error = $"the coinbase nonce must equal the block index {blockIndex}.";
-        else if (transaction.Signature is not null || transaction.PublicKey is not null)
+        // Empty counts as missing, exactly as in the hashes, where null and "" produce the same input.
+        else if (!string.IsNullOrEmpty(transaction.Signature) || !string.IsNullOrEmpty(transaction.PublicKey))
             error = "a coinbase has no public key or signature.";
         else if (transaction.Id != transaction.ComputeId())
             error = "the coinbase id does not match its contents.";

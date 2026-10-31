@@ -93,12 +93,28 @@ public sealed class Wallet : IDisposable
                 key.ImportFromPem(pem);
             else
                 key.ImportFromEncryptedPem(pem, password);
+
+            // A file with only a public key imports fine, but such a "wallet" could never sign anything.
+            if (!HasPrivateKey(key))
+                throw new CryptographicException($"{path} holds only a public key; a wallet needs the private key.");
             return new Wallet(key);
         }
         catch
         {
             key.Dispose();
             throw;
+        }
+    }
+
+    private static bool HasPrivateKey(ECDsa key)
+    {
+        try
+        {
+            return key.ExportParameters(includePrivateParameters: true).D is { Length: > 0 };
+        }
+        catch (CryptographicException)
+        {
+            return false;
         }
     }
 

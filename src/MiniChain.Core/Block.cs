@@ -33,15 +33,17 @@ public sealed class Block
 
     /// <summary>
     /// Hashes the payload in a fixed order. Each transaction is hashed on its own from its
-    /// <em>recomputed</em> id plus its signature, so changing any field of any transaction changes
-    /// the block hash. The concatenation of those fixed-length hashes is hashed again, so no separator
-    /// character can make two different lists produce the same input.
+    /// <em>recomputed</em> id (which covers every field except the signature), its <em>stored</em> id and
+    /// its signature. So the hash covers everything validation looks at: no edit can produce an invalid
+    /// copy of a block that still has the original hash and proof of work. The concatenation of those
+    /// fixed-length hashes is hashed again, so no separator character can make two different lists
+    /// produce the same input.
     /// </summary>
     public string ComputeTransactionsHash()
     {
         var builder = new StringBuilder(Transactions.Count * 64);
         foreach (var transaction in Transactions)
-            builder.Append(HashUtil.Sha256Hex($"{transaction.ComputeId()}|{transaction.Signature}"));
+            builder.Append(HashUtil.Sha256Hex($"{transaction.ComputeId()}|{transaction.Id}|{transaction.Signature}"));
         return HashUtil.Sha256Hex(builder.ToString());
     }
 

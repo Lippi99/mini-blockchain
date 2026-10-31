@@ -45,12 +45,6 @@ public sealed class LedgerState
             error = "the block has no coinbase transaction.";
             return false;
         }
-        if (transactions.Count - 1 > parameters.MaxTransactionsPerBlock)
-        {
-            error = $"the block has {transactions.Count - 1} transactions besides the coinbase; the limit is {parameters.MaxTransactionsPerBlock}.";
-            return false;
-        }
-
         var coinbase = transactions[0];
         if (!TransactionValidator.ValidateCoinbase(coinbase, block.Index, out var coinbaseError))
         {
@@ -69,49 +63,60 @@ public sealed class LedgerState
         var ids = new HashSet<string>(StringComparer.Ordinal) { coinbase.Id };
         long fees = 0;
 
-        for (var i = 1; i < transactions.Count; i++)
+        // Every sum is checked: a long that silently wraps around would turn a huge balance negative.
+        try
         {
-            var transaction = transactions[i];
-            if (!TransactionValidator.Validate(transaction, out var reason))
+            for (var i = 1; i < transactions.Count; i++)
             {
-                error = $"transaction #{i} ({transaction.Id}): {reason}";
-                return false;
+                var transaction = transactions[i];
+                if (!TransactionValidator.Validate(transaction, out var reason))
+                {
+                    error = $"transaction #{i} ({transaction.Id}): {reason}";
+                    return false;
+                }
+                if (ContainsTransaction(transaction.Id) || !ids.Add(transaction.Id))
+                {
+                    error = $"transaction #{i} ({transaction.Id}) is a duplicate.";
+                    return false;
+                }
+
+                var expectedNonce = checked((nonces.TryGetValue(transaction.From, out var lastNonce) ? lastNonce : GetNonce(transaction.From)) + 1);
+                if (transaction.Nonce != expectedNonce)
+                {
+                    error = $"transaction #{i} ({transaction.Id}) has nonce {transaction.Nonce}, but the sender's next nonce is {expectedNonce}.";
+                    return false;
+                }
+
+                var balance = BalanceOf(transaction.From);
+                var cost = checked(transaction.Amount + transaction.Fee);
+                if (balance < cost)
+                {
+                    error = $"transaction #{i} ({transaction.Id}) spends {cost}, but the sender only has {balance}.";
+                    return false;
+                }
+
+                // The sender is debited before the recipient is credited, so paying yourself only costs the fee.
+                balances[transaction.From] = balance - cost;
+                balances[transaction.To] = checked(BalanceOf(transaction.To) + transaction.Amount);
+                nonces[transaction.From] = transaction.Nonce;
+                fees = checked(fees + transaction.Fee);
             }
-            if (ContainsTransaction(transaction.Id) || !ids.Add(transaction.Id))
+
+            var maxCoinbase = checked(parameters.BlockReward + fees);
+            if (coinbase.Amount > maxCoinbase)
             {
-                error = $"transaction #{i} ({transaction.Id}) is a duplicate.";
+                error = $"the coinbase pays {coinbase.Amount}, but the block reward plus fees is only {maxCoinbase}.";
                 return false;
             }
 
-            var expectedNonce = (nonces.TryGetValue(transaction.From, out var lastNonce) ? lastNonce : GetNonce(transaction.From)) + 1;
-            if (transaction.Nonce != expectedNonce)
-            {
-                error = $"transaction #{i} ({transaction.Id}) has nonce {transaction.Nonce}, but the sender's next nonce is {expectedNonce}.";
-                return false;
-            }
-
-            var balance = BalanceOf(transaction.From);
-            var cost = transaction.Amount + transaction.Fee;
-            if (balance < cost)
-            {
-                error = $"transaction #{i} ({transaction.Id}) spends {cost}, but the sender only has {balance}.";
-                return false;
-            }
-
-            balances[transaction.From] = balance - cost;
-            balances[transaction.To] = BalanceOf(transaction.To) + transaction.Amount;
-            nonces[transaction.From] = transaction.Nonce;
-            fees += transaction.Fee;
+            // The reward is credited last, so a miner can only spend it from the next block on.
+            balances[coinbase.To] = checked(BalanceOf(coinbase.To) + coinbase.Amount);
         }
-
-        if (coinbase.Amount > parameters.BlockReward + fees)
+        catch (OverflowException)
         {
-            error = $"the coinbase pays {coinbase.Amount}, but the block reward plus fees is only {parameters.BlockReward + fees}.";
+            error = "an amount in the block is too large: a balance would overflow.";
             return false;
         }
-
-        // The reward is credited last, so a miner can only spend it from the next block on.
-        balances[coinbase.To] = BalanceOf(coinbase.To) + coinbase.Amount;
 
         foreach (var (address, balance) in balances)
             _balances[address] = balance;

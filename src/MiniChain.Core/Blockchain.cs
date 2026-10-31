@@ -59,7 +59,7 @@ public sealed class Blockchain
     /// <summary>Validates <paramref name="block"/> as the next block (header, proof of work and transactions) and appends it.</summary>
     public bool TryAddBlock(Block block, [NotNullWhen(false)] out string? error)
     {
-        if (!ChainValidator.ValidateBlock(block, LatestBlock, NextDifficulty, out var reason) ||
+        if (!ChainValidator.ValidateBlock(block, LatestBlock, Parameters, NextDifficulty, out var reason) ||
             !_ledger.TryApplyBlock(block, Parameters, out reason))
         {
             error = $"Block #{block.Index}: {reason}";
@@ -141,7 +141,7 @@ public sealed class Blockchain
 
         // Clocks differ between machines, but a block may never be older than the block before it.
         timestamp = Math.Max(timestamp, LatestBlock.Timestamp);
-        var reward = Parameters.BlockReward + transactions.Sum(t => t.Fee);
+        var reward = checked(Parameters.BlockReward + transactions.Sum(t => t.Fee));
 
         return new Block
         {

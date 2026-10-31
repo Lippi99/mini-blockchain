@@ -194,6 +194,20 @@ public sealed class NodeApiTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_block_dated_hours_in_the_future_is_rejected()
+    {
+        var block = await NextBlockAsync();
+        block.Timestamp = Now() + 3 * 60 * 60 * 1000;
+        Miner.MineSequential(block);
+
+        using var response = await _node.SubmitBlockAsync(block);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("in the future", await ErrorOf(response));
+        Assert.Equal(0, (await _node.GetStatusAsync()).Height);
+    }
+
+    [Fact]
     public async Task A_valid_block_from_a_peer_is_appended_once()
     {
         var block = await NextBlockAsync();

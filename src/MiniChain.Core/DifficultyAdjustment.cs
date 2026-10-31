@@ -30,10 +30,11 @@ public static class DifficultyAdjustment
         // and the genesis block (with its fixed, old timestamp) is never part of the window.
         var first = chain[index - interval];
         var actualMs = previous.Timestamp - first.Timestamp;
-        var targetMs = (interval - 1) * parameters.TargetBlockTimeMs;
+        var targetMs = (interval - 1) * (double)parameters.TargetBlockTimeMs;
 
         // One hex digit is a 16x change in work, so only react to large deviations. Without this band
-        // the difficulty would flip back and forth every period.
+        // the difficulty would flip back and forth every period. (The target is a double, so halving an
+        // odd target does not round it down and large settings cannot overflow.)
         if (actualMs < targetMs / 2)
             return Math.Min(previous.Difficulty + 1, ProofOfWork.MaxDifficulty);
         if (actualMs > targetMs * 2)

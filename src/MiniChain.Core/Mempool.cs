@@ -9,7 +9,13 @@ namespace MiniChain.Core;
 /// </summary>
 public sealed class Mempool
 {
+    public const int DefaultCapacity = 5_000;
+
     private readonly Dictionary<string, Transaction> _transactions = new(StringComparer.Ordinal);
+
+    // Per sender: how many transactions are pending and how much they spend in total, so checking a new
+    // transaction does not need a scan of the whole mempool.
+    private readonly Dictionary<string, (int Count, long Spend)> _senders = new(StringComparer.Ordinal);
 
     // Highest fee first. Ties go to the older transaction, then to the smaller id, so the order is deterministic.
     private static readonly Comparer<Transaction> HighestFeeFirst = Comparer<Transaction>.Create((a, b) =>
@@ -21,6 +27,15 @@ public sealed class Mempool
         return byTime != 0 ? byTime : string.CompareOrdinal(a.Id, b.Id);
     });
 
+    /// <summary>Creates a mempool that holds at most <paramref name="capacity"/> transactions.</summary>
+    public Mempool(int capacity = DefaultCapacity)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
+        Capacity = capacity;
+    }
+
+    public int Capacity { get; }
+
     public int Count => _transactions.Count;
 
     public IReadOnlyCollection<Transaction> Transactions => _transactions.Values;
@@ -28,41 +43,8 @@ public sealed class Mempool
     public bool Contains(string id) => _transactions.ContainsKey(id);
 
     /// <summary>Adds <paramref name="transaction"/> if it is valid on top of <paramref name="chain"/> and the pending transactions.</summary>
-    public bool TryAdd(Transaction transaction, Blockchain chain, [NotNullWhen(false)] out string? error)
-    {
-        // The cheap duplicate checks come first: a node hears about the same transaction from every peer.
-        if (Contains(transaction.Id))
-        {
-            error = "the transaction is already pending.";
-            return false;
-        }
-        if (chain.ContainsTransaction(transaction.Id))
-        {
-            error = "the transaction is already in the chain.";
-            return false;
-        }
-        if (!TransactionValidator.Validate(transaction, out error))
-            return false;
-
-        var pending = _transactions.Values.Where(t => t.From == transaction.From).ToList();
-        var expectedNonce = chain.GetNonce(transaction.From) + pending.Count + 1;
-        if (transaction.Nonce != expectedNonce)
-        {
-            error = $"the nonce is {transaction.Nonce}, but the sender's next nonce is {expectedNonce}.";
-            return false;
-        }
-
-        var available = chain.GetBalance(transaction.From) - pending.Sum(t => t.Amount + t.Fee);
-        var cost = transaction.Amount + transaction.Fee;
-        if (cost > available)
-        {
-            error = $"the transaction spends {cost}, but the sender only has {available} available.";
-            return false;
-        }
-
-        _transactions.Add(transaction.Id, transaction);
-        return true;
-    }
+    public bool TryAdd(Transaction transaction, Blockchain chain, [NotNullWhen(false)] out string? error) =>
+        TryAdd(transaction, chain, verify: true, out error);
 
     /// <summary>
     /// Picks up to <paramref name="maxCount"/> transactions for the next block, highest fee first. A
@@ -96,6 +78,9 @@ public sealed class Mempool
     /// </summary>
     public IReadOnlyList<Transaction> Revalidate(Blockchain chain, IEnumerable<Transaction>? returned = null)
     {
+        // Transactions already in the mempool passed every check that does not depend on the chain,
+        // signature included, so only the chain-dependent checks run again for them.
+        var verified = new HashSet<string>(_transactions.Keys, StringComparer.Ordinal);
         var candidates = _transactions.Values
             .Concat(returned ?? [])
             .DistinctBy(t => t.Id)
@@ -105,12 +90,63 @@ public sealed class Mempool
             .ToList();
 
         _transactions.Clear();
+        _senders.Clear();
         var removed = new List<Transaction>();
         foreach (var transaction in candidates)
         {
-            if (!TryAdd(transaction, chain, out _))
+            var verify = transaction.Id is null || !verified.Contains(transaction.Id);
+            if (!TryAdd(transaction, chain, verify, out _))
                 removed.Add(transaction);
         }
         return removed;
+    }
+
+    private bool TryAdd(Transaction transaction, Blockchain chain, bool verify, [NotNullWhen(false)] out string? error)
+    {
+        if (string.IsNullOrEmpty(transaction.Id))
+        {
+            error = "the transaction has no id.";
+            return false;
+        }
+
+        // The cheap duplicate checks come first: a node hears about the same transaction from every peer.
+        if (Contains(transaction.Id))
+        {
+            error = "the transaction is already pending.";
+            return false;
+        }
+        if (chain.ContainsTransaction(transaction.Id))
+        {
+            error = "the transaction is already in the chain.";
+            return false;
+        }
+        if (_transactions.Count >= Capacity)
+        {
+            error = $"the mempool is full ({Capacity} transactions); try again after the next block.";
+            return false;
+        }
+        if (verify && !TransactionValidator.Validate(transaction, out error))
+            return false;
+
+        var (pendingCount, pendingSpend) = _senders.GetValueOrDefault(transaction.From);
+        var expectedNonce = chain.GetNonce(transaction.From) + pendingCount + 1;
+        if (transaction.Nonce != expectedNonce)
+        {
+            error = $"the nonce is {transaction.Nonce}, but the sender's next nonce is {expectedNonce}.";
+            return false;
+        }
+
+        var available = chain.GetBalance(transaction.From) - pendingSpend;
+        var cost = transaction.Amount + transaction.Fee;
+        if (cost > available)
+        {
+            error = $"the transaction spends {cost}, but the sender only has {available} available.";
+            return false;
+        }
+
+        _transactions.Add(transaction.Id, transaction);
+        _senders[transaction.From] = (pendingCount + 1, pendingSpend + cost);
+        error = null;
+        return true;
     }
 }

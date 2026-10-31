@@ -51,14 +51,16 @@ public sealed class NodeState : IDisposable
     private readonly Blockchain _chain;
     private readonly Mempool _mempool;
     private readonly IChainStore _store;
+    private readonly TimeProvider _time;
     private readonly ILogger<NodeState> _logger;
     private CancellationTokenSource _tipChanged = new();
 
-    public NodeState(Blockchain chain, Mempool mempool, IChainStore store, ILogger<NodeState> logger)
+    public NodeState(Blockchain chain, Mempool mempool, IChainStore store, TimeProvider time, ILogger<NodeState> logger)
     {
         _chain = chain;
         _mempool = mempool;
         _store = store;
+        _time = time;
         _logger = logger;
     }
 
@@ -129,6 +131,9 @@ public sealed class NodeState : IDisposable
             if (_chain.ContainsBlock(block.Hash))
                 return new BlockResult(BlockSubmission.Known);
 
+            if (!ChainValidator.ValidateNotInFuture(block, Now(), _chain.Parameters, out var future))
+                return new BlockResult(BlockSubmission.Rejected, $"Block #{block.Index}: {future}");
+
             var tip = _chain.LatestBlock;
             if (block.PreviousHash == tip.Hash)
             {
@@ -163,6 +168,13 @@ public sealed class NodeState : IDisposable
         if (!ChainValidator.TryValidate(blocks, _chain.Parameters, out var candidate, out var invalid))
             return new ChainAdoptionResult(ChainAdoption.Invalid, invalid);
 
+        var now = Now();
+        for (var i = 0; i < candidate.Blocks.Count; i++)
+        {
+            if (!ChainValidator.ValidateNotInFuture(candidate.Blocks[i], now, _chain.Parameters, out var future))
+                return new ChainAdoptionResult(ChainAdoption.Invalid, $"Block #{i}: {future}");
+        }
+
         lock (_gate)
         {
             var oldHeight = _chain.LatestBlock.Index;
@@ -195,6 +207,8 @@ public sealed class NodeState : IDisposable
         lock (_gate)
             _tipChanged.Dispose();
     }
+
+    private long Now() => _time.GetUtcNow().ToUnixTimeMilliseconds();
 
     private void Persist()
     {

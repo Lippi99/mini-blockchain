@@ -59,16 +59,17 @@ public static class SignatureVerifier
         try
         {
             ecdsa.ImportSubjectPublicKeyInfo(publicKey, out _);
+            if (!ecdsa.VerifyData(Convert.FromHexString(transaction.Id), signature, HashAlgorithmName.SHA256))
+            {
+                error = "the signature is not valid.";
+                return false;
+            }
         }
-        catch (CryptographicException)
+        catch (Exception e) when (e is CryptographicException or PlatformNotSupportedException)
         {
+            // A point that is not on the curve throws CryptographicException on Linux and macOS, but
+            // PlatformNotSupportedException on Windows. Either way the transaction is invalid; it must not crash the node.
             error = "the public key is not a valid point on the curve.";
-            return false;
-        }
-
-        if (!ecdsa.VerifyData(Convert.FromHexString(transaction.Id), signature, HashAlgorithmName.SHA256))
-        {
-            error = "the signature is not valid.";
             return false;
         }
 

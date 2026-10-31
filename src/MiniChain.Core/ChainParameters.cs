@@ -17,14 +17,29 @@ public sealed record ChainParameters
             : throw new ArgumentOutOfRangeException(nameof(Difficulty), value, $"Must be between 0 and {ProofOfWork.MaxDifficulty}.");
     } = 4;
 
+    /// <summary>The largest allowed <see cref="BlockReward"/>. It keeps every balance far from overflowing a long.</summary>
+    public const long MaxBlockReward = 1_000_000_000_000;
+
     /// <summary>New coins a miner may pay itself in each block's coinbase, on top of the fees.</summary>
     public long BlockReward
     {
         get;
-        init => field = value > 0
+        init => field = value is > 0 and <= MaxBlockReward
             ? value
-            : throw new ArgumentOutOfRangeException(nameof(BlockReward), value, "Must be positive.");
+            : throw new ArgumentOutOfRangeException(nameof(BlockReward), value, $"Must be between 1 and {MaxBlockReward}.");
     } = 50;
+
+    /// <summary>
+    /// How far ahead of a node's clock a block's timestamp may be (two hours, as in Bitcoin). Clocks on
+    /// different machines never agree exactly, so a little drift has to be allowed.
+    /// </summary>
+    public long MaxFutureBlockTimeMs
+    {
+        get;
+        init => field = value >= 0
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(MaxFutureBlockTimeMs), value, "Cannot be negative.");
+    } = 2 * 60 * 60 * 1000;
 
     /// <summary>How many transactions a block may hold besides its coinbase.</summary>
     public int MaxTransactionsPerBlock

@@ -47,7 +47,7 @@ public static class ChainValidator
             }
 
             var expectedDifficulty = DifficultyAdjustment.ExpectedDifficulty(copy, i, parameters);
-            if (!ValidateBlock(copy[i], copy[i - 1], expectedDifficulty, out var blockError) ||
+            if (!ValidateBlock(copy[i], copy[i - 1], parameters, expectedDifficulty, out var blockError) ||
                 !ledger.TryApplyBlock(copy[i], parameters, out blockError))
             {
                 error = $"Block #{i}: {blockError}";
@@ -65,13 +65,11 @@ public static class ChainValidator
     /// <paramref name="previous"/> and carries a valid proof of work. Transactions are checked by
     /// <see cref="LedgerState"/>.
     /// </summary>
-    public static bool ValidateBlock(Block block, Block previous, int expectedDifficulty, [NotNullWhen(false)] out string? error)
+    public static bool ValidateBlock(Block block, Block previous, ChainParameters parameters, int expectedDifficulty,
+        [NotNullWhen(false)] out string? error)
     {
-        if (IsMalformed(block))
-        {
-            error = "the block is malformed: a required field is missing.";
+        if (!ValidateShape(block, parameters, out error))
             return false;
-        }
 
         var computedHash = block.ComputeHash();
         if (block.Hash != computedHash)
@@ -100,11 +98,8 @@ public static class ChainValidator
     /// </summary>
     public static bool ValidateProofOfWork(Block block, ChainParameters parameters, [NotNullWhen(false)] out string? error)
     {
-        if (IsMalformed(block))
-        {
-            error = "the block is malformed: a required field is missing.";
+        if (!ValidateShape(block, parameters, out error))
             return false;
-        }
 
         var possibleDifficulty = parameters.AdjustDifficulty ? block.Difficulty >= 1 : block.Difficulty == parameters.Difficulty;
         var computedHash = block.ComputeHash();
@@ -120,7 +115,31 @@ public static class ChainValidator
         return error is null;
     }
 
-    // Blocks can arrive from the network, so do not trust that required fields are present.
-    private static bool IsMalformed(Block block) =>
-        block.PreviousHash is null || block.Hash is null || block.Transactions is null || block.Transactions.Any(t => t is null);
+    /// <summary>
+    /// Rejects blocks dated more than <see cref="ChainParameters.MaxFutureBlockTimeMs"/> ahead of the local
+    /// clock. A node applies this to every block it receives. Without it, one block dated years ahead would
+    /// drag every later timestamp along (a block may not be older than its parent), and with difficulty
+    /// adjustment on, the difficulty would only ever go up.
+    /// </summary>
+    public static bool ValidateNotInFuture(Block block, long nowMs, ChainParameters parameters, [NotNullWhen(false)] out string? error)
+    {
+        error = block.Timestamp - nowMs > parameters.MaxFutureBlockTimeMs
+            ? $"the timestamp {block.Timestamp} is more than {parameters.MaxFutureBlockTimeMs / 1000} seconds in the future."
+            : null;
+        return error is null;
+    }
+
+    // Cheap checks that come before any hashing: blocks can arrive from the network, so required fields
+    // may be missing, and a block with far too many transactions should not cost a hash per transaction.
+    private static bool ValidateShape(Block block, ChainParameters parameters, [NotNullWhen(false)] out string? error)
+    {
+        if (block.PreviousHash is null || block.Hash is null || block.Transactions is null || block.Transactions.Any(t => t is null))
+            error = "the block is malformed: a required field is missing.";
+        else if (block.Transactions.Count - 1 > parameters.MaxTransactionsPerBlock)
+            error = $"the block has {block.Transactions.Count - 1} transactions besides the coinbase; the limit is {parameters.MaxTransactionsPerBlock}.";
+        else
+            error = null;
+
+        return error is null;
+    }
 }

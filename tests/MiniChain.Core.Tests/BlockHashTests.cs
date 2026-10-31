@@ -35,13 +35,14 @@ public class BlockHashTests
     public void The_hash_matches_the_canonical_header_format()
     {
         // Computed outside .NET with `sha256sum`. Each transaction contributes
-        // SHA-256("{id}|{signature}"), TransactionsHash is the SHA-256 of those hashes concatenated,
-        // and the block hash is the SHA-256 of "1|1767225600000|abc123|{TransactionsHash}|2|42".
-        // If this test fails, the format changed and every existing chain would stop validating.
+        // SHA-256("{recomputed id}|{stored id}|{signature}"), TransactionsHash is the SHA-256 of those
+        // hashes concatenated, and the block hash is the SHA-256 of
+        // "1|1767225600000|abc123|{TransactionsHash}|2|42". If this test fails, the format changed and
+        // every existing chain would stop validating.
         var block = SampleBlock();
 
-        Assert.Equal("29013c27a11268fc41894f0163241fcb58bb554e4971dfeffb4d35157c9ca183", block.ComputeTransactionsHash());
-        Assert.Equal("39d652b987671d3b4c6bb86ba0cfd8ff8d70005880aaa421ffbd9f59e31333e8", block.ComputeHash());
+        Assert.Equal("9bb8a249cad0565dd1deae11dd0ad85273a2106e0f8ba36c3daee844018aabf0", block.ComputeTransactionsHash());
+        Assert.Equal("ccd22c1b5f3bdd352d163623ffa9856ae80ba5edc5b14121f2ba7141468be23b", block.ComputeHash());
     }
 
     public static TheoryData<string, Action<Block>> FieldChanges => new()
@@ -51,6 +52,7 @@ public class BlockHashTests
         { "PreviousHash", b => b.PreviousHash = "abc124" },
         { "Transaction amount", b => b.Transactions = [b.Transactions[0] with { Amount = 6 }, b.Transactions[1]] },
         { "Transaction signature", b => b.Transactions = [b.Transactions[0] with { Signature = "ab" }, b.Transactions[1]] },
+        { "Transaction stored id", b => b.Transactions = [b.Transactions[0] with { Id = new string('0', 64) }, b.Transactions[1]] },
         { "Transaction order", b => b.Transactions = [b.Transactions[1], b.Transactions[0]] },
         { "Transaction removed", b => b.Transactions = [b.Transactions[0]] },
         { "Transaction added", b => b.Transactions = [.. b.Transactions, Transaction.Create(AddressThree, AddressOne, 1, 0, 1, 0)] },

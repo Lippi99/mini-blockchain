@@ -64,9 +64,9 @@ internal static partial class WalletCommands
         {
             return Wallet.Load(path, Password(options));
         }
-        catch (Exception e) when (e is CryptographicException or ArgumentException)
+        catch (Exception e) when (e is CryptographicException or ArgumentException or PlatformNotSupportedException)
         {
-            throw new CliUsageException($"Could not open {path}: wrong or missing password? ({e.Message})");
+            throw new CliUsageException($"Could not open {path}: wrong or missing password, or not a wallet file? ({e.Message})");
         }
     }
 
@@ -81,9 +81,19 @@ internal static partial class WalletCommands
     private static string PathFor(CommandLine options) =>
         Path.Combine(options.Get("wallet-dir") ?? "wallets", $"{NameOf(options)}.pem");
 
-    private static string? Password(CommandLine options) =>
-        options.Get("password") ?? Environment.GetEnvironmentVariable("MINICHAIN_WALLET_PASSWORD");
+    private static string? Password(CommandLine options)
+    {
+        // A bare --password would otherwise silently become no password at all.
+        if (options.Has("password") && options.Get("password") is null)
+            throw new CliUsageException("--password needs a value, for example: --password \"correct horse battery staple\"");
+        if (options.Get("password") is { Length: 0 })
+            throw new CliUsageException("The password cannot be empty.");
 
-    [GeneratedRegex("^[A-Za-z0-9_-]{1,64}$")]
+        var fromEnvironment = Environment.GetEnvironmentVariable("MINICHAIN_WALLET_PASSWORD");
+        return options.Get("password") ?? (string.IsNullOrEmpty(fromEnvironment) ? null : fromEnvironment);
+    }
+
+    // \z rather than $: in .NET, $ also matches just before a trailing newline.
+    [GeneratedRegex(@"^[A-Za-z0-9_-]{1,64}\z")]
     private static partial Regex WalletName();
 }

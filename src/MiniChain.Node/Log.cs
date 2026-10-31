@@ -7,6 +7,18 @@ internal static partial class Log
         Message = "Node {Url} is ready at height {Height} (difficulty {Difficulty}); mining rewards go to {MinerAddress}")]
     public static partial void NodeStarted(ILogger logger, string? url, long height, int difficulty, string minerAddress);
 
+    [LoggerMessage(EventId = 2, Level = LogLevel.Information, Message = "Chain storage: {Location}")]
+    public static partial void ChainStorage(ILogger logger, string location);
+
+    [LoggerMessage(EventId = 3, Level = LogLevel.Information, Message = "The node's own wallet (for mining rewards) is {WalletPath}")]
+    public static partial void NodeWallet(ILogger logger, string walletPath);
+
+    [LoggerMessage(EventId = 4, Level = LogLevel.Critical, Message = "Cannot start: {Reason}")]
+    public static partial void StoredChainUnusable(ILogger logger, string reason);
+
+    [LoggerMessage(EventId = 5, Level = LogLevel.Error, Message = "Could not save the chain to {Location}")]
+    public static partial void ChainSaveFailed(ILogger logger, string location, Exception exception);
+
     [LoggerMessage(EventId = 10, Level = LogLevel.Information, Message = "Mined block #{Index} {Hash} with {TransactionCount} transactions")]
     public static partial void BlockMined(ILogger logger, long index, string hash, int transactionCount);
 

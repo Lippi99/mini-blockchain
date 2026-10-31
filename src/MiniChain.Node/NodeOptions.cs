@@ -40,6 +40,12 @@ public sealed class NodeOptions
     /// <summary>How long to wait for a peer before giving up on a request.</summary>
     public int PeerTimeoutSeconds { get; set; } = 5;
 
+    /// <summary>Where the chain is kept: "json" (one readable file), "sqlite" (a database) or "memory" (not kept).</summary>
+    public string Storage { get; set; } = "json";
+
+    /// <summary>The folder for the chain and the node's wallet. Defaults to node-data/&lt;port&gt;.</summary>
+    public string? DataDirectory { get; set; }
+
     public ChainParameters ToChainParameters() => new()
     {
         Difficulty = Difficulty,

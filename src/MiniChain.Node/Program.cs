@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using MiniChain.Core;
 using MiniChain.Node;
+using MiniChain.Node.Storage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,8 +10,19 @@ builder.Services.ConfigureHttpJsonOptions(json => MiniChainJson.Configure(json.S
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton(TimeProvider.System);
 
+// Storage: where the chain and the node's own wallet are kept between restarts.
+builder.Services.AddSingleton(services => NodeStorage.ResolveDataDirectory(
+    services.GetRequiredService<IOptions<NodeOptions>>().Value,
+    services.GetRequiredService<IConfiguration>(),
+    services.GetRequiredService<IHostEnvironment>()));
+builder.Services.AddSingleton(services => NodeStorage.CreateStore(
+    services.GetRequiredService<IOptions<NodeOptions>>().Value,
+    services.GetRequiredService<NodeDataDirectory>()));
+
 // The node's state. Blockchain and Mempool are not thread-safe; only NodeState touches them, under a lock.
-builder.Services.AddSingleton(services => new Blockchain(services.GetRequiredService<IOptions<NodeOptions>>().Value.ToChainParameters()));
+builder.Services.AddSingleton(services => NodeStorage.LoadChain(
+    services.GetRequiredService<IChainStore>(),
+    services.GetRequiredService<IOptions<NodeOptions>>().Value.ToChainParameters()));
 builder.Services.AddSingleton<Mempool>();
 builder.Services.AddSingleton<NodeState>();
 builder.Services.AddSingleton<NodeIdentity>();
@@ -31,10 +43,25 @@ builder.Services.AddHostedService<BackgroundMiner>();
 
 var app = builder.Build();
 
-// Create the node's state now rather than on the first request, so bad settings stop the node at startup.
-var node = app.Services.GetRequiredService<NodeState>();
-var identity = app.Services.GetRequiredService<NodeIdentity>();
-app.Services.GetRequiredService<PeerRegistry>();
+// Load the chain and create the node's state now rather than on the first request, so a corrupted data
+// file or a bad setting stops the node at startup with a clear message.
+NodeState node;
+NodeIdentity identity;
+try
+{
+    node = app.Services.GetRequiredService<NodeState>();
+    identity = app.Services.GetRequiredService<NodeIdentity>();
+    app.Services.GetRequiredService<PeerRegistry>();
+}
+catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException)
+{
+    Log.StoredChainUnusable(app.Logger, e.Message);
+    throw;
+}
+
+Log.ChainStorage(app.Logger, app.Services.GetRequiredService<IChainStore>().Location);
+if (identity.WalletPath is not null)
+    Log.NodeWallet(app.Logger, identity.WalletPath);
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     var summary = node.GetSummary();

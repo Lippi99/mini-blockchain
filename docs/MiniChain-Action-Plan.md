@@ -492,8 +492,8 @@ Right now, everything is lost when a node stops.
 
 ### Done when
 
-- [ ] A node can restart without losing its chain
-- [ ] A corrupted data file is detected when the node starts
+- [x] A node can restart without losing its chain
+- [x] A corrupted data file is detected when the node starts
 
 ---
 

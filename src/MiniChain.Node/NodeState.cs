@@ -1,5 +1,6 @@
 using System.Numerics;
 using MiniChain.Core;
+using MiniChain.Node.Storage;
 
 namespace MiniChain.Node;
 
@@ -48,13 +49,15 @@ public sealed class NodeState : IDisposable
     private readonly Lock _gate = new();
     private readonly Blockchain _chain;
     private readonly Mempool _mempool;
+    private readonly IChainStore _store;
     private readonly ILogger<NodeState> _logger;
     private CancellationTokenSource _tipChanged = new();
 
-    public NodeState(Blockchain chain, Mempool mempool, ILogger<NodeState> logger)
+    public NodeState(Blockchain chain, Mempool mempool, IChainStore store, ILogger<NodeState> logger)
     {
         _chain = chain;
         _mempool = mempool;
+        _store = store;
         _logger = logger;
     }
 
@@ -131,6 +134,7 @@ public sealed class NodeState : IDisposable
                 if (!_chain.TryAddBlock(block, out var error))
                     return new BlockResult(BlockSubmission.Rejected, error);
 
+                Persist();
                 PruneMempool([]);
                 SignalTipChanged();
                 return new BlockResult(BlockSubmission.Appended);
@@ -164,6 +168,7 @@ public sealed class NodeState : IDisposable
             if (!_chain.TryReplaceChain(candidate, out var orphaned, out var error))
                 return new ChainAdoptionResult(ChainAdoption.NotBetter, error);
 
+            Persist();
             PruneMempool(orphaned);
             SignalTipChanged();
             var returned = orphaned.Where(t => _mempool.Contains(t.Id)).ToArray();
@@ -188,6 +193,20 @@ public sealed class NodeState : IDisposable
     {
         lock (_gate)
             _tipChanged.Dispose();
+    }
+
+    private void Persist()
+    {
+        // Saving happens under the lock so the file always matches a chain the node really had. If it fails the
+        // node keeps running from memory; the next save writes the whole difference again.
+        try
+        {
+            _store.Save(_chain.Blocks);
+        }
+        catch (Exception e)
+        {
+            Log.ChainSaveFailed(_logger, _store.Location, e);
+        }
     }
 
     private void PruneMempool(IReadOnlyList<Transaction> returned)

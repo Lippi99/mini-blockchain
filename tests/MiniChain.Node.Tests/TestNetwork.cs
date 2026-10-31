@@ -28,14 +28,24 @@ public sealed class TestNetwork : IAsyncDisposable
             ["MiniChain:Difficulty"] = "1",
             ["MiniChain:MiningThreads"] = "2",
             ["MiniChain:SyncIntervalSeconds"] = "0",
+            ["MiniChain:Storage"] = "memory",
             ["Logging:LogLevel:Default"] = "Warning",
         };
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             configuration[key] = value;
 
         var factory = new NodeFactory(configuration, () => new RoutingHandler(_servers));
+        try
+        {
+            _servers[name] = factory.Server.CreateHandler(); // Starts the node.
+        }
+        catch
+        {
+            factory.Dispose();
+            throw;
+        }
+
         var node = new TestNode(name, factory);
-        _servers[name] = factory.Server.CreateHandler();
         _nodes.Add(node);
         return node;
     }

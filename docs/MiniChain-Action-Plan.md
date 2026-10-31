@@ -263,8 +263,8 @@ In the CLI:
 
 ### Done when
 
-- [ ] Unit tests cover each of the four rules
-- [ ] The tampering experiment behaves as described
+- [x] Unit tests cover each of the four rules
+- [x] The tampering experiment behaves as described
 
 ---
 

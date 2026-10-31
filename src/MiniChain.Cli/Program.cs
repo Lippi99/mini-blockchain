@@ -10,6 +10,8 @@ switch (args[0])
 {
     case "demo":
         return ChainDemo.Run();
+    case "tamper":
+        return TamperDemo.Run();
     default:
         Console.Error.WriteLine($"Unknown command '{args[0]}'.");
         PrintHelp();
@@ -25,5 +27,6 @@ static void PrintHelp()
 
         Commands:
           demo      Build a small chain and print it
+          tamper    Change a block and watch validation detect it
         """);
 }

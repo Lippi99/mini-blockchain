@@ -414,7 +414,7 @@ A block is only accepted if its hash starts with `Difficulty` zeros. The only wa
 ### Done when
 
 - [x] Unsigned or forged transactions are always rejected
-- [ ] Private keys never appear in logs, API responses or Git history
+- [x] Private keys never appear in logs, API responses or Git history
 
 ---
 
@@ -521,8 +521,8 @@ Right now, everything is lost when a node stops.
 
 ### Done when
 
-- [ ] `dotnet test` passes with good coverage of the Core library
-- [ ] Every bug you find gets a regression test
+- [x] `dotnet test` passes with good coverage of the Core library
+- [x] Every bug you find gets a regression test
 
 ---
 
@@ -545,7 +545,7 @@ Right now, everything is lost when a node stops.
 
 ### Done when
 
-- [ ] `docker compose up` starts a working 3-node network
+- [x] `docker compose up` starts a working 3-node network
 - [ ] The CI badge is green on the README
 
 ---

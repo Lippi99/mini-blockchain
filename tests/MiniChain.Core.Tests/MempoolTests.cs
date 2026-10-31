@@ -136,15 +136,17 @@ public class MempoolTests
     }
 
     [Fact]
-    public void Revalidate_takes_back_still_valid_transactions_from_discarded_blocks()
+    public void Revalidate_takes_back_still_valid_transactions_from_discarded_blocks_in_nonce_order()
     {
-        var orphaned = Alice.Pay(Bob, 10, nonce: 1);
-        var alreadyPending = Alice.Pay(Bob, 5, nonce: 2);
+        // Returned out of order: the second payment would be rejected if it were re-added first.
+        var orphanedFirst = Alice.Pay(Bob, 10, nonce: 1);
+        var orphanedSecond = Alice.Pay(Bob, 5, nonce: 2);
 
-        var removed = _mempool.Revalidate(_chain, [alreadyPending, orphaned]);
+        var removed = _mempool.Revalidate(_chain, [orphanedSecond, orphanedFirst]);
 
         Assert.Empty(removed);
         Assert.Equal(2, _mempool.Count);
-        Assert.True(_mempool.Contains(orphaned.Id));
+        Assert.True(_mempool.Contains(orphanedFirst.Id));
+        Assert.True(_mempool.Contains(orphanedSecond.Id));
     }
 }

@@ -164,7 +164,17 @@ public sealed class NodeState : IDisposable
     /// </summary>
     public ChainAdoptionResult TryAdoptChain(IReadOnlyList<Block> blocks)
     {
-        // Validating every block and signature is the slow part, so it happens before taking the lock.
+        // Cheap check first: a chain that does not even claim more work than ours cannot win, so it is not
+        // worth validating every block and signature of it.
+        var claimedWork = blocks.Aggregate(BigInteger.Zero, (work, block) =>
+            work + ProofOfWork.Work(Math.Clamp(block?.Difficulty ?? 0, 0, ProofOfWork.MaxDifficulty)));
+        lock (_gate)
+        {
+            if (claimedWork <= _chain.CumulativeWork)
+                return new ChainAdoptionResult(ChainAdoption.NotBetter, $"it claims {claimedWork} work, which is not more than this chain's {_chain.CumulativeWork}.");
+        }
+
+        // Validating every block and signature is the slow part, so it happens outside the lock.
         if (!ChainValidator.TryValidate(blocks, _chain.Parameters, out var candidate, out var invalid))
             return new ChainAdoptionResult(ChainAdoption.Invalid, invalid);
 

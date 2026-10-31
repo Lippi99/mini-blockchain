@@ -235,8 +235,8 @@ Each block stores the hash of the block before it. This "link" is what turns a l
 
 ### Done when
 
-- [ ] The CLI prints a chain of at least 3 blocks
-- [ ] Every block's `PreviousHash` equals the previous block's `Hash`
+- [x] The CLI prints a chain of at least 3 blocks
+- [x] Every block's `PreviousHash` equals the previous block's `Hash`
 
 ---
 

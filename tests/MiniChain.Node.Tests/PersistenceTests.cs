@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -77,6 +78,34 @@ public sealed class PersistenceTests : IAsyncLifetime
         Assert.Equal(10, (await restarted.GetAccountAsync(_bob.Address)).Balance);
         Assert.Equal(2, (await restarted.GetAccountAsync(_alice.Address)).NextNonce);
         Assert.Equal(4, (await restarted.MineAsync()).Index);
+    }
+
+    [Fact]
+    public async Task Peers_survive_a_restart_and_removed_ones_stay_removed()
+    {
+        var node = _network.StartNode("node1", Settings("json"));
+        using (var kept = await node.Client.PostAsJsonAsync("/peers", new PeerRequest("http://kept"), MiniChainJson.Options))
+            kept.EnsureSuccessStatusCode();
+        using (var dropped = await node.Client.PostAsJsonAsync("/peers", new PeerRequest("http://dropped"), MiniChainJson.Options))
+            dropped.EnsureSuccessStatusCode();
+        using (var removed = await node.Client.DeleteAsync("/peers?url=http%3A%2F%2Fdropped"))
+            removed.EnsureSuccessStatusCode();
+        await _network.StopNodeAsync(node);
+
+        var restarted = _network.StartNode("node1", Settings("json"));
+
+        Assert.Equal(["http://kept"], await restarted.GetPeersAsync());
+    }
+
+    [Fact]
+    public async Task A_damaged_peers_file_does_not_stop_the_node()
+    {
+        Directory.CreateDirectory(_dataDirectory);
+        await File.WriteAllTextAsync(Path.Combine(_dataDirectory, "peers.json"), "{ not a list");
+
+        var node = _network.StartNode("node1", Settings("json"));
+
+        Assert.Empty(await node.GetPeersAsync());
     }
 
     [Fact]

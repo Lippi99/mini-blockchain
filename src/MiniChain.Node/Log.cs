@@ -67,4 +67,10 @@ internal static partial class Log
 
     [LoggerMessage(EventId = 52, Level = LogLevel.Warning, Message = "Could not reach peer {Peer} ({Action}): {Reason}")]
     public static partial void PeerUnreachable(ILogger logger, string peer, string action, string reason);
+
+    [LoggerMessage(EventId = 53, Level = LogLevel.Warning, Message = "Could not read the saved peers in {Path}: {Reason}")]
+    public static partial void PeersNotLoaded(ILogger logger, string path, string reason);
+
+    [LoggerMessage(EventId = 54, Level = LogLevel.Warning, Message = "Could not save the peers to {Path}: {Reason}")]
+    public static partial void PeersNotSaved(ILogger logger, string path, string reason);
 }

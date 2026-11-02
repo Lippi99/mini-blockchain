@@ -115,6 +115,7 @@ public static class NodeApi
         NodeState node,
         GossipService gossip,
         ChainSyncService sync,
+        PeerRegistry peers,
         ILogger<NodeState> logger)
     {
         var from = Origin(origin);
@@ -129,7 +130,8 @@ public static class NodeApi
                 return TypedResults.Ok(new BlockReceivedResponse("known"));
             case BlockSubmission.Behind:
                 Log.BlockAhead(logger, block.Index, from ?? "a client", result.TipIndex);
-                if (from is not null)
+                // The origin header is only a claim, so it may not make the node fetch from an arbitrary URL.
+                if (from is not null && peers.IsKnown(from))
                     sync.RequestSync(from);
                 else
                     sync.RequestSyncWithAllPeers();
@@ -152,6 +154,8 @@ public static class NodeApi
                 sync.RequestSync(url!); // ...and catch up if the new peer is ahead.
                 return TypedResults.Ok(new PeerResponse(url!, Added: true));
             case PeerAddResult.AlreadyKnown:
+                // Sync, but do not introduce this node again: two nodes would keep introducing themselves forever.
+                sync.RequestSync(url!);
                 return TypedResults.Ok(new PeerResponse(url!, Added: false));
             case PeerAddResult.Self:
                 return TypedResults.BadRequest(new ErrorResponse("A node cannot be its own peer."));

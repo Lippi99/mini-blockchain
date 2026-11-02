@@ -19,8 +19,16 @@ public sealed class TestNetwork : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, HttpMessageHandler> _servers = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<TestNode> _nodes = [];
+    private readonly ConcurrentDictionary<string, byte> _requestedHosts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _blackHoles = new(StringComparer.OrdinalIgnoreCase);
 
-    public TestNode StartNode(string name, IReadOnlyDictionary<string, string?>? settings = null)
+    /// <summary>Every host a node tried to contact, whether or not anything is running there.</summary>
+    public ICollection<string> RequestedHosts => _requestedHosts.Keys;
+
+    /// <summary>Makes requests to <paramref name="host"/> hang until they time out, like a peer that went dark.</summary>
+    public void AddBlackHole(string host) => _blackHoles[host] = 0;
+
+    public TestNode StartNode(string name, IReadOnlyDictionary<string, string?>? settings = null, Action<IServiceCollection>? replaceServices = null)
     {
         var configuration = new Dictionary<string, string?>
         {
@@ -34,7 +42,7 @@ public sealed class TestNetwork : IAsyncDisposable
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             configuration[key] = value;
 
-        var factory = new NodeFactory(configuration, () => new RoutingHandler(_servers));
+        var factory = new NodeFactory(configuration, () => new RoutingHandler(this), replaceServices);
         try
         {
             _servers[name] = factory.Server.CreateHandler(); // Starts the node.
@@ -76,29 +84,40 @@ public sealed class TestNetwork : IAsyncDisposable
         _nodes.Clear();
     }
 
-    private sealed class NodeFactory(IReadOnlyDictionary<string, string?> settings, Func<HttpMessageHandler> peerHandler)
-        : WebApplicationFactory<Program>
+    private sealed class NodeFactory(
+        IReadOnlyDictionary<string, string?> settings,
+        Func<HttpMessageHandler> peerHandler,
+        Action<IServiceCollection>? replaceServices) : WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(settings));
             builder.ConfigureTestServices(services =>
-                services.AddHttpClient(HttpPeerClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(peerHandler));
+            {
+                services.AddHttpClient(HttpPeerClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(peerHandler);
+                replaceServices?.Invoke(services);
+            });
         }
     }
 
     /// <summary>Delivers each request to the in-memory server named by the URL's host.</summary>
-    private sealed class RoutingHandler(ConcurrentDictionary<string, HttpMessageHandler> servers) : HttpMessageHandler
+    private sealed class RoutingHandler(TestNetwork network) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var host = request.RequestUri!.Host;
-            if (!servers.TryGetValue(host, out var server))
+            network._requestedHosts[host] = 0;
+
+            if (network._blackHoles.ContainsKey(host))
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            if (!network._servers.TryGetValue(host, out var server))
                 throw new HttpRequestException($"No node called '{host}' is running.");
 
             // The servers' handlers belong to the network, so the invoker must not dispose them.
             using var invoker = new HttpMessageInvoker(server, disposeHandler: false);
-            return invoker.SendAsync(request, cancellationToken);
+            return await invoker.SendAsync(request, cancellationToken);
         }
     }
 

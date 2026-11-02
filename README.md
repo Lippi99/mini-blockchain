@@ -188,7 +188,7 @@ docker compose up --build
 
 starts three nodes on ports 5001, 5002 and 5003 that already know each other (inside the compose
 network they are `http://node1:8080` and so on). Use the CLI or curl against them exactly as above.
-Each node keeps its chain and wallet in its own volume; `docker compose down -v` wipes them.
+Each node keeps its chain, wallet and peer list in its own volume; `docker compose down -v` wipes them.
 
 The image is built by the multi-stage [Dockerfile](Dockerfile). Without it,
 `dotnet publish src/MiniChain.Node -c Release /t:PublishContainer` builds an image too.
@@ -203,10 +203,10 @@ The image is built by the multi-stage [Dockerfile](Dockerfile). Without it,
 | `GET` | `/balance/{address}` | `{ address, balance, nonce, nextNonce }`; `nextNonce` counts pending transactions | 200; 400 for a bad address |
 | `POST` | `/transactions` | Submit a signed transaction | 202 accepted; 409 already known; 400 invalid, with the reason |
 | `GET` | `/mempool` | Pending transactions | 200 |
-| `POST` | `/mine?minerAddress=...` | Mine a block now; the reward goes to `minerAddress` or to the node's wallet | 200 with the block; 409 if other blocks kept arriving |
+| `POST` | `/mine?minerAddress=...` | Mine a block now; the reward goes to `minerAddress` or to the node's wallet | 200 with the block; 400 for a bad address; 409 if other blocks kept arriving. Requests take turns |
 | `POST` | `/blocks` | Receive a block from a peer | 200 `appended`, `known` or `ignored`; 202 `syncing`; 400 invalid |
 | `GET` | `/peers` | Known peers | 200 |
-| `POST` | `/peers` | `{ "url": "http://..." }`: add a peer, introduce this node to it, and sync | 200; 400 for a bad URL or the node itself |
+| `POST` | `/peers` | `{ "url": "http://..." }`: add a peer and introduce this node to it. Syncs with it even if it was already known | 200; 400 for a bad URL or the node itself |
 | `DELETE` | `/peers?url=...` | Remove a peer (used by the network-split experiment) | 204; 404 |
 
 A transaction as JSON (amounts are whole numbers in the smallest unit):
@@ -247,7 +247,7 @@ line (`--MiniChain:Difficulty 3`) or with environment variables (`MiniChain__Dif
 | `SyncIntervalSeconds` | 30 | How often to poll peers and catch up if one is ahead (0 = never) |
 | `PeerTimeoutSeconds` | 5 | How long to wait for a peer |
 | `Storage` | `json` | `json`, `sqlite` or `memory` |
-| `DataDirectory` | `node-data/<port>` | Where the chain and the node's wallet are kept |
+| `DataDirectory` | `node-data/<port>` | Where the chain, the node's wallet and its peer list are kept |
 
 ## Persistence
 
@@ -267,7 +267,9 @@ crit: MiniChain.Node[4]
 ```
 
 If `MinerAddress` is not set, the node mines to a wallet of its own, `node-wallet.pem`, kept in the
-same folder. To spend those rewards, point the CLI at that folder:
+same folder. Peers added at runtime are saved there too (`peers.json`), so they survive a restart;
+peers listed in the `Peers` setting always come back, even if removed. To spend the node's rewards,
+point the CLI at that folder:
 `minichain send --wallet-dir src/MiniChain.Node/node-data/5001 --name node-wallet --to ... --amount ...`.
 
 ## Mining benchmark
@@ -335,6 +337,8 @@ Choices made while following the plan, including the places where this code goes
   block may not be older than its parent.
 - **Bounded work for untrusted input.** The transaction limit is checked before a block is hashed,
   ledger sums are checked for overflow, and the mempool has a capacity (5,000 transactions).
+- **Gossip** gives every peer its own outbox, so a dead peer only delays itself. The origin header is only
+  a claim: a node syncs from that URL only if it is already a known peer.
 - **Peering** is mutual (adding a peer introduces this node to it), and nodes poll their peers
   periodically, so a missed gossip message is repaired within `SyncIntervalSeconds`.
 - **Strict JSON.** Data from peers is untrusted: missing or `null` required fields are rejected while

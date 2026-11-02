@@ -1,24 +1,42 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
+using MiniChain.Core;
+using MiniChain.Node.Storage;
 
 namespace MiniChain.Node;
 
 public enum PeerAddResult { Added, AlreadyKnown, Invalid, Self }
 
-/// <summary>The URLs of the other nodes this node talks to. Thread-safe.</summary>
+/// <summary>
+/// The URLs of the other nodes this node talks to, kept in the data folder so they survive a restart.
+/// Thread-safe.
+/// </summary>
 public sealed class PeerRegistry
 {
     private readonly Lock _gate = new();
     private readonly HashSet<string> _peers = new(StringComparer.Ordinal);
     private readonly NodeIdentity _identity;
+    private readonly ILogger<PeerRegistry> _logger;
+    private readonly string? _path;
 
-    public PeerRegistry(NodeIdentity identity, IOptions<NodeOptions> options)
+    public PeerRegistry(NodeIdentity identity, IOptions<NodeOptions> options, NodeDataDirectory dataDirectory, ILogger<PeerRegistry> logger)
     {
         _identity = identity;
+        _logger = logger;
+        _path = dataDirectory.Path is { } folder ? Path.Combine(folder, "peers.json") : null;
+
         foreach (var peer in options.Value.Peers)
         {
-            if (Add(peer, out _) == PeerAddResult.Invalid)
+            if (!TryNormalize(peer, out var normalized))
                 throw new InvalidOperationException($"MiniChain:Peers contains '{peer}', which is not an absolute http(s) URL.");
+            _peers.Add(normalized);
+        }
+
+        foreach (var peer in LoadSavedPeers())
+        {
+            if (TryNormalize(peer, out var normalized))
+                _peers.Add(normalized);
         }
     }
 
@@ -30,6 +48,13 @@ public sealed class PeerRegistry
             return _peers.Where(peer => peer != self).Order(StringComparer.Ordinal).ToArray();
     }
 
+    /// <summary>Whether <paramref name="normalizedUrl"/>, already in the form <see cref="TryNormalize"/> gives, is a known peer.</summary>
+    public bool IsKnown(string normalizedUrl)
+    {
+        lock (_gate)
+            return _peers.Contains(normalizedUrl);
+    }
+
     public PeerAddResult Add(string? url, out string? normalized)
     {
         if (!TryNormalize(url, out normalized))
@@ -38,7 +63,12 @@ public sealed class PeerRegistry
             return PeerAddResult.Self;
 
         lock (_gate)
-            return _peers.Add(normalized) ? PeerAddResult.Added : PeerAddResult.AlreadyKnown;
+        {
+            if (!_peers.Add(normalized))
+                return PeerAddResult.AlreadyKnown;
+            Save();
+            return PeerAddResult.Added;
+        }
     }
 
     public bool Remove(string? url)
@@ -47,7 +77,12 @@ public sealed class PeerRegistry
             return false;
 
         lock (_gate)
-            return _peers.Remove(normalized);
+        {
+            if (!_peers.Remove(normalized))
+                return false;
+            Save();
+            return true;
+        }
     }
 
     /// <summary>
@@ -69,5 +104,40 @@ public sealed class PeerRegistry
 
         normalized = uri.GetLeftPart(UriPartial.Authority);
         return true;
+    }
+
+    // The peer list is a convenience, not consensus data: a damaged file only costs the saved peers.
+    private List<string> LoadSavedPeers()
+    {
+        if (_path is null || !File.Exists(_path))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<string>>(File.ReadAllText(_path), MiniChainJson.Options) ?? [];
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            Log.PeersNotLoaded(_logger, _path, e.Message);
+            return [];
+        }
+    }
+
+    private void Save()
+    {
+        if (_path is null)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            var temporary = _path + ".tmp";
+            File.WriteAllText(temporary, JsonSerializer.Serialize(_peers.Order(StringComparer.Ordinal), MiniChainJson.Options));
+            File.Move(temporary, _path, overwrite: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Log.PeersNotSaved(_logger, _path, e.Message);
+        }
     }
 }

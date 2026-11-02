@@ -46,6 +46,11 @@ public sealed class TestNetwork : IAsyncDisposable
         try
         {
             _servers[name] = factory.Server.CreateHandler(); // Starts the node.
+
+            // A node contacts the peers it knows from a background task. Wait for that, or it could still
+            // run later and pick up a peer the test added with AddPeerDirectly.
+            if (!factory.Services.GetRequiredService<ChainSyncService>().StartupContactsQueued.Wait(TimeSpan.FromSeconds(20)))
+                throw new TimeoutException($"Node '{name}' did not finish starting.");
         }
         catch
         {

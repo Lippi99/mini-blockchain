@@ -20,6 +20,10 @@ public sealed class ChainSyncService(
 {
     private readonly Channel<string> _requests = Channel.CreateUnbounded<string>();
     private readonly ConcurrentDictionary<string, byte> _queued = new(StringComparer.Ordinal);
+    private readonly TaskCompletionSource _startupContactsQueued = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Completes once the peers known at startup have been queued for an introduction and a sync.</summary>
+    public Task StartupContactsQueued => _startupContactsQueued.Task;
 
     /// <summary>Queues a sync with <paramref name="peer"/>. A peer that is already queued is not queued twice.</summary>
     public void RequestSync(string peer)
@@ -77,6 +81,7 @@ public sealed class ChainSyncService(
             gossip.Introduce(peer);
             RequestSync(peer);
         }
+        _startupContactsQueued.TrySetResult();
 
         await Task.WhenAll(ProcessRequestsAsync(stoppingToken), PollPeersAsync(stoppingToken));
     }

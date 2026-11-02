@@ -86,7 +86,10 @@ public sealed class ChainSyncService(
         await foreach (var peer in _requests.Reader.ReadAllAsync(stoppingToken))
         {
             _queued.TryRemove(peer, out _);
-            await SyncWithAsync(peer, stoppingToken);
+
+            // A peer removed while its sync was waiting (as in a network split) must not be contacted.
+            if (peers.IsKnown(peer))
+                await SyncWithAsync(peer, stoppingToken);
         }
     }
 

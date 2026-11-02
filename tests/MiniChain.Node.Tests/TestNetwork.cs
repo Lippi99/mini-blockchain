@@ -169,6 +169,13 @@ public sealed class TestNetwork : IAsyncDisposable
         public Task<HttpResponseMessage> SubmitBlockAsync(Block block) =>
             Client.PostAsJsonAsync("/blocks", block, MiniChainJson.Options);
 
+        /// <summary>
+        /// Makes <paramref name="other"/> a peer of this node without any network traffic: no introduction
+        /// and no sync, so nothing is still in flight when the test goes on. Use this when a test depends
+        /// on a node NOT having caught up yet.
+        /// </summary>
+        public void AddPeerDirectly(TestNode other) => Services.GetRequiredService<PeerRegistry>().Add(other.Url, out _);
+
         public async Task AddPeerAsync(TestNode other)
         {
             using var response = await Client.PostAsJsonAsync("/peers", new PeerRequest(other.Url), MiniChainJson.Options);

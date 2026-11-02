@@ -72,7 +72,9 @@ public sealed class NetworkTests : IAsyncLifetime
     [Fact]
     public async Task After_a_network_split_the_chain_with_more_work_wins()
     {
-        var (node1, node2, node3) = await StartThreeConnectedNodesAsync();
+        var (node1, node2, node3) = (_network.StartNode("node1"), _network.StartNode("node2"), _network.StartNode("node3"));
+        foreach (var (node, other) in new[] { (node1, node2), (node1, node3), (node2, node1), (node2, node3), (node3, node1), (node3, node2) })
+            node.AddPeerDirectly(other); // No introductions or syncs that could still arrive during the split.
         await node1.MineAsync(_alice.Address);
         await Wait.UntilInSyncAsync(node1, node2, node3);
 

@@ -24,13 +24,11 @@ public sealed class NodeResilienceTests : IAsyncLifetime
     }
 
     /// <summary>Two nodes where <paramref name="behind"/> knows <paramref name="ahead"/>, but not the other way round, so nothing is gossiped.</summary>
-    private async Task<(TestNetwork.TestNode Ahead, TestNetwork.TestNode Behind)> StartOneWayPairAsync(IReadOnlyDictionary<string, string?>? behindSettings = null)
+    private (TestNetwork.TestNode Ahead, TestNetwork.TestNode Behind) StartOneWayPair(IReadOnlyDictionary<string, string?>? behindSettings = null)
     {
         var ahead = _network.StartNode("ahead");
         var behind = _network.StartNode("behind", behindSettings);
-        await behind.AddPeerAsync(ahead);
-        await Wait.UntilAsync(async () => (await ahead.GetPeersAsync()).Contains(behind.Url), "the introduction arrived");
-        await ahead.RemovePeerAsync(behind);
+        behind.AddPeerDirectly(ahead);
         return (ahead, behind);
     }
 
@@ -60,22 +58,40 @@ public sealed class NodeResilienceTests : IAsyncLifetime
         var node = _network.StartNode("node1");
         var kept = _network.StartNode("kept");
         var removed = _network.StartNode("removed");
-        await node.AddPeerAsync(kept);
-        await node.AddPeerAsync(removed);
-        await Wait.UntilAsync(async () => (await removed.GetPeersAsync()).Contains(node.Url), "the introduction arrived");
-        await removed.RemovePeerAsync(node);
-        await node.RemovePeerAsync(removed);
+        node.AddPeerDirectly(kept);
+        node.AddPeerDirectly(removed);
 
+        await node.MineAsync();
+        await Wait.UntilInSyncAsync(node, kept, removed); // Both peers really do receive gossip at first.
+
+        await node.RemovePeerAsync(removed);
         await node.MineAsync();
 
         await Wait.UntilInSyncAsync(node, kept);
-        Assert.Equal(0, (await removed.GetStatusAsync()).Height);
+        Assert.Equal(1, (await removed.GetStatusAsync()).Height);
+    }
+
+    [Fact]
+    public async Task A_queued_sync_with_a_peer_that_is_not_known_is_skipped()
+    {
+        var source = _network.StartNode("source");
+        var node = _network.StartNode("node1");
+        await source.MineAsync();
+        node.AddPeerDirectly(source);
+        var sync = node.Services.GetRequiredService<ChainSyncService>();
+
+        sync.RequestSync("http://removed");
+        sync.RequestSync(source.Url);
+
+        // Syncs run one at a time, so once this later one is done the earlier request has been handled too.
+        await Wait.UntilInSyncAsync(source, node);
+        Assert.DoesNotContain("removed", _network.RequestedHosts);
     }
 
     [Fact]
     public async Task A_block_that_is_ahead_makes_the_node_sync_from_a_known_origin()
     {
-        var (ahead, behind) = await StartOneWayPairAsync();
+        var (ahead, behind) = StartOneWayPair();
         Block tip = null!;
         for (var i = 0; i < 3; i++)
             tip = await ahead.MineAsync();
@@ -90,7 +106,7 @@ public sealed class NodeResilienceTests : IAsyncLifetime
     [Fact]
     public async Task A_block_that_is_ahead_without_an_origin_makes_the_node_sync_from_its_peers()
     {
-        var (ahead, behind) = await StartOneWayPairAsync();
+        var (ahead, behind) = StartOneWayPair();
         Block tip = null!;
         for (var i = 0; i < 3; i++)
             tip = await ahead.MineAsync();
@@ -123,7 +139,7 @@ public sealed class NodeResilienceTests : IAsyncLifetime
     [Fact]
     public async Task The_periodic_poll_catches_up_when_gossip_never_arrives()
     {
-        var (ahead, behind) = await StartOneWayPairAsync(new Dictionary<string, string?> { ["MiniChain:SyncIntervalSeconds"] = "1" });
+        var (ahead, behind) = StartOneWayPair(new Dictionary<string, string?> { ["MiniChain:SyncIntervalSeconds"] = "1" });
 
         await ahead.MineAsync();
         await Wait.UntilInSyncAsync(ahead, behind);
@@ -134,7 +150,7 @@ public sealed class NodeResilienceTests : IAsyncLifetime
     [Fact]
     public async Task Adding_a_peer_that_is_already_known_still_syncs()
     {
-        var (ahead, behind) = await StartOneWayPairAsync();
+        var (ahead, behind) = StartOneWayPair();
         await ahead.MineAsync();
         await ahead.MineAsync();
         Assert.Equal(0, (await behind.GetStatusAsync()).Height);

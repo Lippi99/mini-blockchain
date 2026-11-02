@@ -1,7 +1,5 @@
 # MiniChain
 
-[![CI](https://github.com/<your-user>/minichain/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-user>/minichain/actions/workflows/ci.yml)
-
 An educational blockchain built from scratch in C# on .NET 10: blocks linked by SHA-256 hashes,
 proof-of-work mining, transactions signed with ECDSA, and a network of HTTP nodes that agree on a
 single chain.
